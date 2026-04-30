@@ -188,7 +188,8 @@ function Assert-QuotedPath {
     if ($Value.StartsWith('(') -and $Value.EndsWith(')')) {
         $issues += "looks paren-wrapped -- did you forget quotes?"
     }
-    if ((($Value.ToCharArray() | Where-Object { $_ -eq '"' }).Count % 2) -ne 0) {
+    $quoteChars2 = @($Value.ToCharArray() | Where-Object { $_ -eq '"' })
+    if (($quoteChars2.Count % 2) -ne 0) {
         $issues += "unbalanced double-quote(s)"
     }
     if ($Value.Contains("`n") -or $Value.Contains("`r")) {
