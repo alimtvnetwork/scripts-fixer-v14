@@ -1,4 +1,4 @@
-# AI Project Onboarding Protocol
+# Read Memory
 
 > **Purpose:** This document is a mandatory onboarding sequence for any AI assistant joining this project. It ensures you internalize all specifications, rules, and conventions before writing a single line of code.
 
@@ -9,10 +9,13 @@
 ## Table of Contents
 
 1. [Phase 1 — AI Context Layer](#phase-1--ai-context-layer)
-2. [Phase 2 — Deep-Dive Source Specs](#phase-2--deep-dive-source-specs-task-driven)
-3. [Anti-Hallucination Contract](#anti-hallucination-contract)
-4. [Memory Update Protocol](#memory-update-protocol)
-5. [Completion Confirmation](#completion-confirmation)
+2. [Phase 2 — Consolidated Guidelines](#phase-2--consolidated-guidelines)
+3. [Phase 3 — Spec Authoring Rules](#phase-3--spec-authoring-rules)
+4. [Phase 4 — Deep-Dive Source Specs](#phase-4--deep-dive-source-specs-task-driven)
+5. [Anti-Hallucination Contract](#anti-hallucination-contract)
+6. [Memory Update Protocol](#memory-update-protocol)
+7. [Completion Confirmation](#completion-confirmation)
+8. CI/CD issues review — read every `.lovable/cicd-issues/xx-*.md` and never repeat those mistakes.
 
 ---
 
@@ -40,7 +43,7 @@
 ### Step 1.3 — Self-check (answer these internally before continuing)
 
 - [ ] What are the project's **CODE RED** rules?
-- [ ] What naming conventions are enforced (files, folders, variables)?
+- [ ] What naming conventions are enforced (files, folders, DB columns, variables)?
 - [ ] What is the error handling philosophy?
 - [ ] What is the current plan and what tasks are in progress?
 - [ ] What patterns/tools/approaches are **strictly forbidden**?
@@ -49,7 +52,53 @@
 
 ---
 
-## Phase 2 — Deep-Dive Source Specs (Task-Driven)
+## Phase 2 — Consolidated Guidelines
+
+**Goal:** Absorb the project's unified rulebook — self-contained guideline documents.
+
+### Instructions
+
+1. Navigate to `spec/12-consolidated-guidelines/`.
+2. Read files in **numeric order**: `01-*.md` through the last numbered file.
+3. Each file is self-contained. Treat each as a standalone policy document.
+
+### After reading, confirm internally
+
+- [ ] Total number of guideline files read.
+- [ ] One-sentence summary of the key rule from each file.
+- [ ] Any rules that contradict your default training (these are intentional — the spec wins).
+
+> If `spec/12-consolidated-guidelines/` does not yet exist in this repo, note it and continue — do not invent its contents.
+
+> ⛔ **DO NOT proceed to Phase 3 until all available files have been read.**
+
+---
+
+## Phase 3 — Spec Authoring Rules
+
+**Goal:** Understand how specifications themselves are structured, so you can read them correctly and author new ones if asked.
+
+### Instructions
+
+1. Navigate to `spec/01-spec-authoring-guide/`.
+2. Read all files in numeric order.
+
+### After reading, confirm you understand
+
+| Concept | Where It's Defined |
+|---------|-------------------|
+| File and folder naming conventions | Spec authoring guide |
+| Required files in every spec folder (`00-overview.md`, `99-consistency-report.md`) | Spec authoring guide |
+| The `.lovable/` folder structure and its purpose | `07-memory-folder-guide.md` |
+| Linter infrastructure requirements | Spec authoring guide |
+
+> If `spec/01-spec-authoring-guide/` does not yet exist, note it and continue — do not invent its contents.
+
+> ⛔ **DO NOT begin any task until Phases 1–3 are complete.**
+
+---
+
+## Phase 4 — Deep-Dive Source Specs (Task-Driven)
 
 **Goal:** Before performing any task, read the relevant source spec(s) so your work is compliant.
 
@@ -57,25 +106,30 @@
 
 | If your task involves... | Read this spec folder |
 |--------------------------|----------------------|
-| Script 01 (VS Code) | `spec/01-install-vscode/` |
-| Script 02 (Chocolatey) | `spec/02-install-package-managers/` |
-| Script 03 (Node.js) | `spec/03-install-nodejs/` |
-| Script 12 (Orchestrator) | `spec/12-install-all-dev-tools/` |
-| Script 42 (Ollama) | `spec/42-install-ollama/` |
-| Script 43 (llama.cpp) | `spec/43-install-llama-cpp/` |
-| Model picker | `spec/model-picker/` |
-| Shared helpers | `spec/shared/` |
-| Doctor command | `spec/doctor/` |
-| Audit command | `spec/audit/` |
-| Database scripts | `spec/databases/` |
-| Root dispatcher | `spec/root-dispatcher/` |
-| Version bumping | `spec/bump-version/` |
-| Release pipeline | `spec/release-pipeline/` |
+| Writing or reviewing code | `spec/02-coding-guidelines/` |
+| Error handling | `spec/03-error-manage/` |
+| Database schema or queries | `spec/04-database-conventions/` |
+| SQLite or multi-database architecture | `spec/05-split-db-architecture/` |
+| Configuration systems | `spec/06-seedable-config-architecture/` |
+| UI theming, CSS variables, design tokens | `spec/07-design-system/` |
+| Documentation viewer features | `spec/08-docs-viewer-ui/` |
+| Code block rendering | `spec/09-code-block-system/` |
+| PowerShell scripts | `spec/10-powershell-integration/` |
+| CI/CD pipelines | `spec/13-cicd-pipeline-workflows/` |
+| CLI self-update system | `spec/14-self-update-app-update/` |
+| WordPress plugins | `spec/15-wp-plugin-how-to/` |
+| App-specific features | `spec/21-app/` |
+| Known app bugs/issues | `spec/22-app-issues/` |
+| App-specific database schema | `spec/23-app-database/` |
+| App-specific UI and design system | `spec/24-app-design-system-and-ui/` |
+
+Existing per-script specs in this repo (e.g. `spec/01-install-vscode/`, `spec/42-install-ollama/`, `spec/68-user-mgmt/`, `spec/shared/`, `spec/databases/`, `spec/release-pipeline/`, `spec/bump-version/`) are also Phase 4 sources — read them when the task involves the matching script.
 
 ### Reading order within each folder
 
-1. `readme.md` — always first (this project uses readme.md, not 00-overview.md)
-2. All other files in the folder
+1. `00-overview.md` or `readme.md` — always first
+2. All numbered files in order
+3. `99-consistency-report.md` — always last (if present)
 
 ---
 
@@ -84,22 +138,24 @@
 These rules are **absolute and non-negotiable**. Violating any of them is a critical failure.
 
 ### 1. Never Invent Rules
-If a spec does not mention a rule, that rule does not exist.
+If a spec does not mention a rule, that rule does not exist. Do not fill gaps with assumptions from your training data.
 
 ### 2. Specs Override Training Data
-If your pre-trained knowledge conflicts with a spec, **the spec wins**. Every time.
+If your pre-trained knowledge conflicts with a spec, **the spec wins**. Every time. No exceptions.
 
 ### 3. Cite Your Sources
 When enforcing a rule, reference the **specific file and section**.
 
+> Example: Per `spec/02-coding-guidelines/03-naming.md` § "Database Columns": all column names use PascalCase.
+
 ### 4. Ask When Uncertain
-If a spec is ambiguous or silent on a topic, **ask the human**.
+If a spec is ambiguous or silent on a topic, **ask the human**. Do not guess, infer, or "use best judgment."
 
 ### 5. Never Merge Conventions
-This project has its own conventions. Do not blend with other projects.
+This project has its own conventions. Do not blend them with conventions from other projects, languages, or frameworks you've seen in training.
 
 ### 6. No Filler
-Never append boilerplate. Just deliver the work.
+Never append boilerplate like "Let me know if you have questions!" or "Hope this helps!" Just deliver the work.
 
 ---
 
@@ -124,33 +180,40 @@ New information discovered
 
 ### Critical Rules
 
-- The memory folder is `.lovable/memory/` — **never** `.lovable/memories/`.
-- When adding a new memory file, **always** update the index.
-- When modifying an existing memory, preserve all other content.
+- The memory folder is `.lovable/memory/` — **never** `.lovable/memories/` (no trailing `s`).
+- When adding a new memory file, **always** update the index at `.lovable/memory/index.md`.
+- When modifying an existing memory, preserve all other content — do not truncate or overwrite unrelated entries.
 
 ---
 
 ## Completion Confirmation
 
-After completing Phase 1, respond with:
+After completing **Phases 1 through 3**, respond with exactly this format:
 
 ```
 ✅ Onboarding complete.
 
 - Memory files read: [X]
-- Spec files available: [Y folders in spec/]
+- Consolidated guidelines read: [Y]
+- Spec authoring files read: [Z]
 
 I understand:
-- CODE RED rules: [list]
-- Naming conventions: [summary]
+- CODE RED rules: [list the top 3–5]
+- Naming conventions: [brief summary]
 - Error handling approach: [one sentence]
-- Active plan: [current milestone]
-- Strict avoidances: [top items]
+- Active plan: [current milestone or focus]
+- Strict avoidances: [top 3–5 forbidden patterns]
 
 Ready for tasks.
 ```
 
-Then **stop and wait** for instructions.
+Then **stop and wait** for instructions. Do not suggest next steps. Do not ask exploratory questions. Just wait.
+
+---
+
+## Versioning Rule
+
+Any change to the codebase must bump **at least the minor version** (`scripts/version.json`). No silent changes.
 
 ---
 
