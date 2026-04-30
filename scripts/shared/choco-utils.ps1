@@ -396,7 +396,14 @@ function ConvertFrom-ChocoOutput {
         }
 
         # Per-package "The install of X was successful" / "Failures: - X"
-...
+        $successMatches = [regex]::Matches($combinedText, '(?im)The install of\s+([^\s]+)\s+was successful')
+        foreach ($s in $successMatches) {
+            if ($s.Groups[1].Success) { $result.SuccessPackages += $s.Groups[1].Value }
+        }
+        $failureSection = [regex]::Match($combinedText, '(?ims)Failures:\s*(.+?)(?:\r?\n\r?\n|\z)')
+        if ($failureSection.Success) {
+            $itemMatches = [regex]::Matches($failureSection.Groups[1].Value, '(?im)^\s*-\s*([^\s].*?)\s*$')
+            foreach ($i in $itemMatches) {
                 if ($i.Groups[1].Success) { $result.FailedPackages += $i.Groups[1].Value }
             }
         }
