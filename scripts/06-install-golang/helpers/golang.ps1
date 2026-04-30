@@ -384,7 +384,7 @@ function Get-ChocoGoLibPath {
         -replace '\{libPath\}',         $libPath `
         -replace '\{libPathExists\}',   "$isLibPathPresent" `
         -replace '\{toolsRoot\}',       $toolsRoot `
-        -replace '\{toolsRootExists\}', "$isToolsRootPresent") -Level "info"
+        -replace '\{toolsRootExists\}', "$isToolsRootPresent")) -Level "info"
     Write-Log (($msgs.chocoLibToolsGoExpected `
         -replace '\{toolspath\}', $toolsGo) `
         -replace '\{exists\}',    "$isToolsGoPresent") -Level "info"
