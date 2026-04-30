@@ -1,6 +1,6 @@
 # --------------------------------------------------------------------------
 #  Scripts Fixer -- One-liner bootstrap installer
-#  Usage:  irm https://raw.githubusercontent.com/alimtvnetwork/scripts-fixer-v12/main/install.ps1 | iex
+#  Usage:  irm https://raw.githubusercontent.com/alimtvnetwork/scripts-fixer-v13/main/install.ps1 | iex
 #
 #  Auto-discovery: probes scripts-fixer-vN repos (N = current+1..current+30)
 #  in parallel and redirects to the newest published version.
@@ -16,7 +16,7 @@
     # ----- Configuration ----------------------------------------------------
     $owner    = "alimtvnetwork"
     $baseName = "scripts-fixer"
-    $current  = 12  # <-- bump this when this file is copied into a new -vN repo
+    $current  = 13  # <-- bump this when this file is copied into a new -vN repo
     $repo     = "https://github.com/$owner/$baseName-v$current.git"
     # NOTE: $folder is resolved later -- it is CWD-aware (see Resolve-TargetFolder).
     # Fallback only kicks in when CWD is a protected/system directory.
