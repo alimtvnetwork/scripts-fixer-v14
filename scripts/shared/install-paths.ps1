@@ -100,7 +100,8 @@ function Write-InstallPaths {
         $val = "$($pair.Value)"
         if ([string]::IsNullOrEmpty($val)) { continue }
 
-        $hasUnbalancedQuotes = (($val.ToCharArray() | Where-Object { $_ -eq '"' }).Count % 2) -ne 0
+        $quoteChars = @($val.ToCharArray() | Where-Object { $_ -eq '"' })
+        $hasUnbalancedQuotes = ($quoteChars.Count % 2) -ne 0
         $looksParenWrapped   = $val.StartsWith('(') -and $val.EndsWith(')')
         $hasNewline          = $val.Contains("`n") -or $val.Contains("`r")
 
