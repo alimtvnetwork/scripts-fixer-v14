@@ -1,0 +1,75 @@
+{
+  "_comment": "Configuration for the 'os' subcommand dispatcher and its helpers.",
+  "clean": {
+    "softwareDistribution": "C:\\Windows\\SoftwareDistribution\\Download",
+    "tempEnvVar": "TEMP",
+    "includeWindowsTemp": true,
+    "windowsTemp": "C:\\Windows\\Temp",
+    "clearEventLogs": true,
+    "clearPSReadLineHistory": true,
+    "clearCurrentSessionHistory": true,
+    "clearChocoCache": true,
+    "lockedFilesMaxReport": 50
+  },
+  "tempClean": {
+    "tempEnvVar": "TEMP",
+    "windowsTemp": "C:\\Windows\\Temp",
+    "localAppDataTempVar": "LOCALAPPDATA",
+    "perUserTempRoot": "C:\\Users",
+    "clearChocoTemp": true,
+    "lockedFilesMaxReport": 50
+  },
+  "choco": {
+    "root": "C:\\ProgramData\\chocolatey",
+    "cleanPaths": [
+      "C:\\ProgramData\\chocolatey\\lib-bad",
+      "C:\\ProgramData\\chocolatey\\lib-bkp"
+    ],
+    "backupGlob": "C:\\ProgramData\\chocolatey\\.chocolatey\\*\\.backup",
+    "nupkgCacheGlob": "C:\\ProgramData\\chocolatey\\lib\\*\\*.nupkg",
+    "tempGlob": "chocolatey",
+    "useChocoCleaner": true
+  },
+  "hibernate": {
+    "hiberfilPath": "C:\\hiberfil.sys"
+  },
+  "longPath": {
+    "registryKey": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\FileSystem",
+    "valueName": "LongPathsEnabled"
+  },
+  "addUser": {
+    "defaultGroup": "Users",
+    "passwordNeverExpires": true,
+    "accountNeverExpires": true,
+    "pinHintFolder": "%TEMP%"
+  },
+  "startup": {
+    "_comment": "Cross-OS startup-add (apps + env vars). Tag prefix is shared with Unix side.",
+    "tagPrefix": "lovable-startup",
+    "defaultAppMethod": "startup-folder",
+    "defaultEnvScope": "user",
+    "methods": {
+      "app": ["startup-folder", "hkcu-run", "hklm-run", "task"],
+      "env": ["registry", "setx"]
+    },
+    "paths": {
+      "startupFolderUser": "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup",
+      "startupFolderCommon": "%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"
+    },
+    "registry": {
+      "runUser": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "runMachine": "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "envUser": "HKCU:\\Environment",
+      "envMachine": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment"
+    },
+    "task": {
+      "folder": "lovable-startup",
+      "scheduleType": "ONLOGON",
+      "runLevel": "LIMITED",
+      "elevatedRunLevel": "HIGHEST"
+    },
+    "broadcastSettingChange": true,
+    "forceReplaceDefault": false,
+    "logFileName": "startup-add"
+  }
+}

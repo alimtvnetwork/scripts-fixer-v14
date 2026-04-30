@@ -1,0 +1,59 @@
+{
+  "scriptName": "install-gitmap",
+  "description": "Installs gitmap CLI -- a Git repository navigator tool for Windows.",
+  "messages": {
+    "notAdmin": "This script requires admin privileges. Please run as Administrator.",
+    "checking": "Checking for gitmap...",
+    "found": "gitmap already installed",
+    "foundVersion": "gitmap already installed (v{version})",
+    "notFound": "gitmap not found -- will install now",
+    "installDir": "gitmap install directory: {path}",
+    "installing": "Installing gitmap via remote installer...",
+    "installSuccess": "gitmap installed successfully",
+    "installSuccessVersion": "gitmap installed successfully (v{version})",
+    "installFailed": "gitmap install failed: {error}",
+    "notInPath": "gitmap installed but not found in PATH (may need shell restart)",
+    "verifyStart": "Verifying 'gitmap --version' works in current session...",
+    "verifyOk": "Verified: gitmap --version -> {version}",
+    "verifyBinaryAt": "gitmap binary path: {path}",
+    "verifyMissing": "'gitmap' not found on PATH after install -- refreshing environment...",
+    "verifyRefreshed": "PATH refreshed from registry. Entries added: {count}",
+    "verifyProbe": "Probing well-known gitmap install locations: {paths}",
+    "verifyFoundAt": "Found gitmap.exe at {path} -- prepending its folder to session PATH",
+    "verifyExitCode": "'gitmap --version' exited with code {code}; output: {output}",
+    "verifyFinalFail": "Could not run 'gitmap --version' after install. Open a NEW terminal and re-run.",
+    "setupComplete": "gitmap setup complete",
+    "disabled": "gitmap install is disabled in config",
+    "downloadingInstaller": "Downloading gitmap installer from GitHub...",
+    "runningInstaller": "Running gitmap installer...",
+    "installerLogFile": "Capturing installer stdout/stderr to: {path}",
+    "installerLogSaved": "Installer transcript saved ({bytes} bytes): {path}",
+    "installerLogFailed": "Could not write installer transcript to {path}: {error}",
+    "remoteInstallerFailed": "Remote installer failed -- falling back to ZIP download",
+    "downloadingZip": "Downloading gitmap release ZIP from: {url}",
+    "zipExtracted": "ZIP extracted to: {path}",
+    "zipFallbackFailed": "ZIP fallback also failed: {error}",
+    "uninstalling": "Uninstalling {name}...",
+    "uninstallSuccess": "{name} uninstalled successfully.",
+    "uninstallFailed": "{name} uninstall failed -- package may need manual removal.",
+    "uninstallComplete": "Uninstall complete. Package removed, tracking purged."
+  },
+  "help": {
+    "commands": {
+      "install": "Install gitmap CLI (default)",
+      "uninstall": "Uninstall completely, remove tracking, clean up"
+    },
+    "flags": {
+      "-Tag <tag>":     "Pin a specific release tag (e.g. v3.180, v3.181, v4.0.0). Substituted into installUrl/releaseZipUrl.",
+      "-Version <tag>": "Back-compat alias for -Tag."
+    },
+    "examples": [
+      ".\\run.ps1 -I 35",
+      ".\\run.ps1 -I 35 -Tag v3.181",
+      ".\\run.ps1 install gitmap",
+      ".\\run.ps1 install gitmap -Tag v4.0.0",
+      ".\\run.ps1 -I 35 -- -Help",
+      ".\\run.ps1 uninstall"
+    ]
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "enabled": true,
+  "repair": {
+    "_comment": "Allow-list for the 'repair' verb. Only deletes named child keys that EXACTLY match one of these names under HKCR\\*\\shell, HKCR\\Directory\\shell, and HKCR\\Directory\\Background\\shell. Never enumerates outside this list.",
+    "_enforceComment": "When true (default), the 'check' verb FAILS if file-target is still present, suppression values exist, or legacy duplicates exist. Set false to opt out.",
+    "enforceInvariants": true,
+    "legacyNames": [
+      "VSCode2", "VSCode3", "VSCodeOld", "VSCode_old",
+      "OpenWithCode", "OpenWithVSCode", "Open with Code", "OpenCode",
+      "VSCodeInsiders2", "VSCodeInsidersOld", "OpenWithInsiders"
+    ]
+  },
+  "editions": {
+    "stable": {
+      "vscodePath": {
+        "user": "%LOCALAPPDATA%\\Programs\\Microsoft VS Code\\Code.exe",
+        "system": "C:\\Program Files\\Microsoft VS Code\\Code.exe"
+      },
+      "registryPaths": {
+        "file": "Registry::HKEY_CLASSES_ROOT\\*\\shell\\VSCode",
+        "directory": "Registry::HKEY_CLASSES_ROOT\\Directory\\shell\\VSCode",
+        "background": "Registry::HKEY_CLASSES_ROOT\\Directory\\Background\\shell\\VSCode"
+      },
+      "contextMenuLabel": "Open with Code"
+    },
+    "insiders": {
+      "vscodePath": {
+        "user": "%LOCALAPPDATA%\\Programs\\Microsoft VS Code Insiders\\Code - Insiders.exe",
+        "system": "C:\\Program Files\\Microsoft VS Code Insiders\\Code - Insiders.exe"
+      },
+      "registryPaths": {
+        "file": "Registry::HKEY_CLASSES_ROOT\\*\\shell\\VSCodeInsiders",
+        "directory": "Registry::HKEY_CLASSES_ROOT\\Directory\\shell\\VSCodeInsiders",
+        "background": "Registry::HKEY_CLASSES_ROOT\\Directory\\Background\\shell\\VSCodeInsiders"
+      },
+      "contextMenuLabel": "Open with Code - Insiders"
+    }
+  },
+  "installationType": "user",
+  "enabledEditions": [
+    "stable",
+    "insiders"
+  ]
+}

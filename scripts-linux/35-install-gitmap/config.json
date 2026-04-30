@@ -1,0 +1,12 @@
+{
+  "install": {
+    "method":      "curlOneLiner",
+    "scriptName":  "gitmap",
+    "releaseTag":  "v3.180",
+    "installUrl":  "https://github.com/alimtvnetwork/gitmap-v9/releases/download/{tag}/install.sh",
+    "binDir":      "${HOME}/.local/bin"
+  },
+  "verify": {
+    "binary": "${HOME}/.local/bin/gitmap --version"
+  }
+}

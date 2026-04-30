@@ -1,0 +1,226 @@
+# --------------------------------------------------------------------------
+#  Script 54 -- install.ps1 (standalone installer)
+#
+#  Writes the classic "Open with Code" registry keys for every enabled
+#  edition. Independent of script 10. Path allow-list lives in config.json.
+# --------------------------------------------------------------------------
+param(
+    [string]$Edition,
+    [string]$VsCodePath,
+    [ValidateSet('Auto','CurrentUser','AllUsers')]
+    [string]$Scope = 'Auto',
+    [ValidateSet('Quiet','Normal','Debug')]
+    [string]$Verbosity = 'Normal',
+    [switch]$Help
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$sharedDir = Join-Path (Split-Path -Parent $scriptDir) "shared"
+
+# -- Shared helpers (lightweight: only logging + json + admin/help) ----------
+. (Join-Path $sharedDir "logging.ps1")
+. (Join-Path $sharedDir "resolved.ps1")
+. (Join-Path $sharedDir "help.ps1")
+
+# -- Script helpers -----------------------------------------------------------
+. (Join-Path $scriptDir "helpers\vscode-install.ps1")
+. (Join-Path $scriptDir "helpers\audit-log.ps1")
+. (Join-Path $scriptDir "helpers\registry-snapshot.ps1")
+. (Join-Path $scriptDir "helpers\vscode-check.ps1")
+. (Join-Path $scriptDir "helpers\verbosity.ps1")
+
+# -- Load config & log messages -----------------------------------------------
+$configPath = Join-Path $scriptDir "config.json"
+$isConfigMissing = -not (Test-Path -LiteralPath $configPath)
+if ($isConfigMissing) {
+    Write-Host "FATAL: config.json not found at $configPath" -ForegroundColor Red
+    exit 1
+}
+$config      = Import-JsonConfig $configPath
+$logMessages = Import-JsonConfig (Join-Path $scriptDir "log-messages.json")
+
+if ($Help) { Show-ScriptHelp -LogMessages $logMessages; return }
+
+Write-Banner -Title ($logMessages.scriptName + " -- install")
+Initialize-Logging -ScriptName ($logMessages.scriptName + " -- install")
+
+try {
+    # -- Disabled check -------------------------------------------------------
+    $isDisabled = -not $config.enabled
+    if ($isDisabled) { Write-Log $logMessages.messages.scriptDisabled -Level "warn"; return }
+
+    # -- Verbosity (controls verification + audit-report loudness) -----------
+    Set-VerbosityLevel -Level $Verbosity
+
+    # -- Open audit log (timestamped, one file per run) ----------------------
+    $auditPath = Initialize-RegistryAudit -Action "install" -ScriptDir $scriptDir
+
+    # -- Pre-install snapshot (always-on; per user spec) ---------------------
+    # Captures the current state of every target key BEFORE any write so the
+    # user has a forensic trail / manual restore path. Snapshot is best-effort
+    # -- a snapshot failure must not block the install.
+    $snapshotPath = New-PreInstallSnapshot -Config $config -ScriptDir $scriptDir
+    $hasSnapshot = -not [string]::IsNullOrWhiteSpace($snapshotPath)
+    if ($hasSnapshot) {
+        Write-Log ($logMessages.messages.snapshotWritten -replace '\{path\}', $snapshotPath) -Level "info"
+    } else {
+        Write-Log $logMessages.messages.snapshotSkipped -Level "warn"
+    }
+
+    # -- Resolve scope + admin gate ------------------------------------------
+    # Scope drives WHERE the registry keys land:
+    #   AllUsers    -> HKEY_CLASSES_ROOT (HKLM under the hood)  -> needs admin
+    #   CurrentUser -> HKCU\Software\Classes                    -> any user
+    #   Auto        -> AllUsers if admin, else CurrentUser
+    Write-Log $logMessages.messages.checkingAdmin -Level "info"
+    $identity  = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+    $isAdmin   = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    Write-Log ($logMessages.messages.currentUser -replace '\{name\}', $identity.Name) -Level "info"
+    Write-Log ($logMessages.messages.isAdministrator -replace '\{value\}', $isAdmin) -Level $(if ($isAdmin) { "success" } else { "warn" })
+
+    $resolvedScope = Resolve-MenuScope -Requested $Scope -IsAdmin $isAdmin
+    Write-Log ("Resolved scope: requested='" + $Scope + "', resolved='" + $resolvedScope + "'") -Level "info"
+
+    # Late-bind the resolved scope into the audit log so every event line
+    # AND the change-report banner show which hive was actually touched.
+    Set-RegistryAuditScope -Scope $resolvedScope
+
+    # Centralized elevation guidance (BLOCK + actionable rerun commands +
+    # CurrentUser fallback). Returns $false when the run cannot proceed.
+    $mayProceed = Write-ScopeAdminGuidance -Action 'install' -RequestedScope $Scope `
+        -ResolvedScope $resolvedScope -IsAdmin $isAdmin
+    if (-not $mayProceed) { return }
+
+    # -- Decide editions ------------------------------------------------------
+    $editions = if ([string]::IsNullOrWhiteSpace($Edition)) {
+        @($config.enabledEditions)
+    } else {
+        @($Edition)
+    }
+
+    $processedCount = 0
+    $skippedCount   = 0
+    $resolvedSummary = @{}
+    # Per-edition scope-rewritten config blocks -- handed to the post-op
+    # verification step so it probes the SAME paths the writes targeted.
+    $scopedEditions = @{}
+
+    foreach ($editionName in $editions) {
+        $editionCfg = $config.editions.$editionName
+        $isUnknown = $null -eq $editionCfg
+        if ($isUnknown) {
+            Write-Log ($logMessages.messages.editionUnknown -replace '\{name\}', $editionName) -Level "warn"
+            $skippedCount++
+            continue
+        }
+
+        # Rewrite this edition's registryPaths for the resolved scope so
+        # every helper (Register-VsCodeMenuEntry, Test-VsCodeMenuEntry,
+        # the audit log) sees the scoped path with no further plumbing.
+        $editionCfg = Convert-EditionPathsForScope -EditionConfig $editionCfg -Scope $resolvedScope
+        $scopedEditions[$editionName] = $editionCfg
+
+        Write-Log (($logMessages.messages.editionStart -replace '\{name\}', $editionName) -replace '\{label\}', $editionCfg.label) -Level "info"
+
+        # Resolve exe
+        $vsCodeExe = Resolve-VsCodeExecutable `
+            -EditionName $editionName `
+            -ConfigPath  $editionCfg.vsCodePath `
+            -Override    $VsCodePath `
+            -LogMsgs     $logMessages
+        $isExeMissing = -not $vsCodeExe
+        if ($isExeMissing) { $skippedCount++; continue }
+
+        # Resolve repo root (parent of scripts/) for confirm-launch wrapper
+        $repoRoot = Split-Path -Parent (Split-Path -Parent $scriptDir)
+        $confirmCfg = $null
+        if ($config.PSObject.Properties.Name -contains 'confirmBeforeLaunch') {
+            $confirmCfg = $config.confirmBeforeLaunch
+        }
+
+        # Write each of the three targets
+        $isAllOk = $true
+        foreach ($target in @('file', 'directory', 'background')) {
+            $regPath = $editionCfg.registryPaths.$target
+            $cmdTpl  = $editionCfg.commandTemplates.$target
+            $ok = Register-VsCodeMenuEntry `
+                -TargetName      $target `
+                -RegistryPath    $regPath `
+                -Label           $editionCfg.label `
+                -VsCodeExe       $vsCodeExe `
+                -CommandTemplate $cmdTpl `
+                -RepoRoot        $repoRoot `
+                -ConfirmCfg      $confirmCfg `
+                -LogMsgs         $logMessages `
+                -EditionName     $editionName
+            if (-not $ok) { $isAllOk = $false }
+        }
+
+        # Verify
+        Write-Log ($logMessages.messages.verify -replace '\{name\}', $editionName) -Level "info"
+        foreach ($target in @('file', 'directory', 'background')) {
+            $regPath = $editionCfg.registryPaths.$target
+            $ok = Test-VsCodeMenuEntry -TargetName $target -RegistryPath $regPath -LogMsgs $logMessages
+            if (-not $ok) { $isAllOk = $false }
+        }
+
+        $resolvedSummary[$editionName] = @{
+            vsCodeExe = $vsCodeExe
+            ok        = $isAllOk
+            at        = (Get-Date -Format "o")
+            scope     = $resolvedScope
+        }
+        $processedCount++
+    }
+
+    Save-ResolvedData -ScriptFolder "54-vscode-menu-installer" -Data @{
+        action   = "install"
+        editions = $resolvedSummary
+        scope    = $resolvedScope
+        timestamp = (Get-Date -Format "o")
+    }
+
+    $msg = (($logMessages.messages.summaryInstall -replace '\{processed\}', $processedCount) -replace '\{skipped\}', $skippedCount)
+    Write-Log $msg -Level $(if ($skippedCount -eq 0 -and $processedCount -gt 0) { "success" } else { "warn" })
+    Write-Log $logMessages.messages.tip -Level "info"
+    $hasAuditPath = -not [string]::IsNullOrWhiteSpace($auditPath)
+    if ($hasAuditPath) {
+        Write-Log ($logMessages.messages.auditWritten -replace '\{path\}', $auditPath) -Level "info"
+    }
+
+    # ------------------------------------------------------------------
+    # Dedicated post-install verification step.
+    #   1) Print the registry CHANGE report from the run's audit JSONL
+    #      so the user sees exactly what was added / failed.
+    #   2) Re-probe every (scope-rewritten) target key and confirm it
+    #      now exists -- catches any silent post-write disappearance.
+    # ------------------------------------------------------------------
+    $hasScopedEditions = $scopedEditions.Count -gt 0
+    if ($hasScopedEditions) {
+        $auditSummary = Get-RegistryAuditSummary
+        Write-RegistryAuditReport -Summary $auditSummary -Action 'install'
+
+        $verifyResult = Invoke-PostOpVerification `
+            -Action         'install' `
+            -Config         $config `
+            -ResolvedScope  $resolvedScope `
+            -LogMsgs        $logMessages `
+            -ScopedEditions $scopedEditions
+
+        if ($verifyResult.fail -gt 0) {
+            Write-Log ("Post-install verification reported " + $verifyResult.fail + " failing key(s) -- review the table above (failure path: see per-row regPath).") -Level "error"
+        }
+    } else {
+        Write-Log "Post-install verification skipped: no editions were processed this run." -Level "warn"
+    }
+
+} catch {
+    Write-Log "Unhandled error: $_" -Level "error"
+    Write-Log "Stack: $($_.ScriptStackTrace)" -Level "error"
+} finally {
+    $hasErrors = $script:_LogErrors.Count -gt 0
+    Save-LogFile -Status $(if ($hasErrors) { "fail" } else { "ok" })
+}

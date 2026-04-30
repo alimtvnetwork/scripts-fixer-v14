@@ -1,0 +1,49 @@
+{
+  "_comment": "Configuration for 68-user-mgmt: cross-OS user/group creation. Linux uses useradd/groupadd, macOS uses dscl. CODE RED: every file/path error must include exact path + reason.",
+  "defaults": {
+    "linux": {
+      "shell": "/bin/bash",
+      "homeBase": "/home",
+      "createHome": true,
+      "userGroup": "users",
+      "sudoGroup": "sudo"
+    },
+    "macos": {
+      "shell": "/bin/zsh",
+      "homeBase": "/Users",
+      "createHome": true,
+      "userGroup": "staff",
+      "sudoGroup": "admin",
+      "uidStart": 510
+    }
+  },
+  "password": {
+    "_comment": "Plain-text passwords accepted via CLI/JSON to mirror the Windows side. Always prefer --password-file (chmod 600) for non-throwaway accounts. Logs NEVER record passwords.",
+    "minLength": 1,
+    "maskChar": "*",
+    "maskMaxLen": 8,
+    "passwordFileModeMax": "0600"
+  },
+  "json": {
+    "_comment": "JSON inputs may be a single object or an array. Both shapes auto-detected at parse time.",
+    "userKeys":  ["name", "password", "passwordFile", "uid", "groups", "primaryGroup", "shell", "home", "comment", "sudo", "system"],
+    "groupKeys": ["name", "gid", "system"]
+  },
+  "manifestRetention": {
+    "_comment": "Auto-cleanup policy for ssh-key rollback manifests under /var/lib/68-user-mgmt/ssh-key-runs. Applied (a) by remove-ssh-keys.sh --prune, and (b) opportunistically after a successful add-user.sh run that wrote a manifest, so the dir self-maintains. Disable per-run with --no-auto-prune (or UM_NO_AUTO_PRUNE=1). Each policy is OR-combined: a manifest is removed if it matches ANY enabled policy. Set a value to 0 to disable that specific policy.",
+    "olderThanDays":     90,
+    "keepLastPerUser":   20,
+    "maxTotal":          500,
+    "autoPruneOnInstall": true
+  },
+  "summaryDiscovery": {
+    "_comment": "Glob patterns used by verify-summary.sh to auto-discover summary JSON files under the runs directory. Patterns are evaluated relative to --root (default: <UM_MANIFEST_DIR>/, falling back to /var/lib/68-user-mgmt/ssh-key-runs). Use --recursive (or set recursiveDefault=true) to enable bash globstar (**). Override per-run with --glob PATTERN (repeatable) -- when supplied on CLI, these defaults are ignored. Each pattern is OR-combined; matched files are de-duplicated by absolute path before validation. CODE RED: missing root or unreadable matches always log the exact path + reason.",
+    "defaultPatterns": [
+      "summaries/*.summary.json",
+      "summaries/**/*.summary.json"
+    ],
+    "recursiveDefault":  true,
+    "followSymlinks":    false,
+    "maxFiles":          5000
+  }
+}

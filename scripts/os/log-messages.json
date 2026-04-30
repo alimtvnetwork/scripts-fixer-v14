@@ -1,0 +1,101 @@
+{
+  "scriptName": "OS Subcommands",
+  "description": "Windows housekeeping subcommands: clean, temp-clean, hib-off, flp, add-user.",
+  "status": {
+    "ok":   "[  OK  ]",
+    "fail": "[ FAIL ]",
+    "info": "[ INFO ]",
+    "warn": "[ WARN ]",
+    "skip": "[ SKIP ]",
+    "lock": "[ LOCK ]"
+  },
+  "messages": {
+    "adminRequired": "Administrator elevation required. Re-launching with -Verb RunAs ...",
+    "adminRelaunchFailed": "Failed to re-launch elevated. Run this command from an Administrator PowerShell.",
+    "userCancelled": "Cancelled by user.",
+    "confirmPrompt": "Proceed? [y/N]: "
+  },
+  "clean": {
+    "stepStart": "Step {n}: {label}",
+    "stepDone": "Step {n} done -- removed {count} item(s), freed {mb} MB, locked {locked}",
+    "stepError": "Step {n} error at {path}: {error}",
+    "stepSkipped": "Step {n} skipped: {reason}",
+    "summaryHeader": "OS Clean Summary",
+    "summaryRow": "  {label} | items: {count} | freed: {mb} MB | locked: {locked} | status: {status}",
+    "lockedHeader": "Locked / un-removable files (skipped, will retry on next reboot or after closing the holding process)",
+    "lockedRow": "  {path}  --  {reason}",
+    "lockedTruncated": "  ... and {more} more locked file(s) not shown (limit: {limit}). See log file for full list.",
+    "chocoCleanerFound": "choco-cleaner detected -- running it as part of choco cache cleanup",
+    "chocoCleanerNotFound": "choco-cleaner not installed -- using manual choco cache sweep only",
+    "chocoCleanerFailed": "choco-cleaner exited with errors: {error}",
+    "chocoCleanStart": "Cleaning Chocolatey cache (lib-bad, lib-bkp, *.backup, *.nupkg cache, %TEMP%\\chocolatey) -- live install untouched",
+    "chocoNotInstalled": "Chocolatey not installed -- skipping choco cache cleanup"
+  },
+  "tempClean": {
+    "header": "Temp directories cleanup -- locked files will be reported, not crashed on",
+    "perUserSweep": "Sweeping per-user Temp folders under {root} ({count} user profile(s) found)",
+    "summaryHeader": "OS Temp-Clean Summary"
+  },
+  "hibernate": {
+    "off": "Hibernation disabled. Freed {gb} GB (hiberfil.sys removed).",
+    "offNoFile": "Hibernation disabled. hiberfil.sys was not present (already off or never enabled).",
+    "on": "Hibernation enabled.",
+    "powercfgFailed": "powercfg.exe /hibernate {mode} failed with exit code {code}."
+  },
+  "longPath": {
+    "alreadyEnabled": "Long paths already enabled (LongPathsEnabled=1).",
+    "enabled": "Long paths enabled (LongPathsEnabled=1). Reboot recommended.",
+    "verifyFailed": "Failed to set LongPathsEnabled at {path}. Current value: {current}",
+    "missingArgs": "Missing arguments. Usage: .\\run.ps1 os add-user <name> <pass> [pin] [email]"
+  },
+  "addUser": {
+    "missingName": "Missing <name>. Usage: .\\run.ps1 os add-user <name> <pass> [pin] [email]",
+    "missingPass": "Missing <pass>. Usage: .\\run.ps1 os add-user <name> <pass> [pin] [email]",
+    "userExists": "User '{name}' already exists -- skipping create.",
+    "userCreated": "Created local user '{name}'.",
+    "userCreateFailed": "Failed to create user '{name}': {error}",
+    "addedToGroup": "Added '{name}' to group '{group}'.",
+    "groupAddFailed": "Could not add '{name}' to group '{group}': {error}",
+    "pinNotice": "PIN '{pinMasked}' provided. Windows requires interactive PIN setup. Hint saved to '{hintFile}'. Sign in as '{name}' and use Settings -> Accounts -> Sign-in options to set the PIN.",
+    "pinHintWriteFailed": "Failed to write PIN hint file at '{path}': {error}",
+    "emailNotice": "Email '{email}' noted. To link a Microsoft account, '{name}' must sign in to Settings -> Accounts -> 'Sign in with a Microsoft account instead'.",
+    "msAccountNotice": "Microsoft/Outlook email '{email}' associated with '{name}'. Linking is interactive: sign in as '{name}' and use Settings -> Accounts -> 'Sign in with a Microsoft account instead'.",
+    "msAccountRunOnceSet": "Queued RunOnce 'ms-settings:emailandaccounts' for '{name}' (will open at first interactive logon).",
+    "msAccountRunOnceNoProfile": "Could not queue RunOnce -- profile not loaded yet. Path: {path}. User '{name}' must sign in once before RunOnce can be set.",
+    "msAccountRunOnceFailed": "Failed to queue RunOnce for '{name}': {error}",
+    "summaryHeader": "User Setup Summary"
+  },
+  "startup": {
+    "header": "Cross-OS startup-add (apps + env vars)",
+    "missingSubcommand": "Missing subcommand. Usage: .\\run.ps1 os startup-add <app|env> ...",
+    "missingAppPath": "Missing <path>. Usage: .\\run.ps1 os startup-add app <path> [--method ...] [--name N]",
+    "missingEnvPair": "Missing KEY=VALUE. Usage: .\\run.ps1 os startup-add env KEY=VALUE [--scope user|machine]",
+    "appNotFound": "Application path not found: {path}",
+    "methodChosen": "Method: {method}  (name='{name}')",
+    "methodInvalid": "Unknown method '{method}'. Valid: {valid}",
+    "interactivePrompt": "Pick startup method:",
+    "interactiveOption": "  [{n}] {method}  -- {desc}",
+    "interactiveAsk": "Choose [1-{max}] or 'q' to quit: ",
+    "adminRequiredForMethod": "Method '{method}' requires Administrator. Re-run elevated or pick a user-scope method.",
+    "alreadyExistsSameMethod": "Entry '{name}' already exists via {method}. Replacing (upsert).",
+    "alreadyExistsOtherMethod": "Entry '{name}' already exists via {existing}. Pass --force-replace to switch to {method}, or run startup-remove first.",
+    "addOk": "Added startup entry '{name}' via {method} -> {target}",
+    "addFailed": "Failed to add '{name}' via {method}: {error}",
+    "envSet": "Set environment variable {key}={valueMasked} ({scope} scope, {method})",
+    "envBroadcast": "Broadcast WM_SETTINGCHANGE -- new shells and Explorer will see {key} immediately.",
+    "envBroadcastFailed": "WM_SETTINGCHANGE broadcast failed: {error}. Sign out / sign in to apply {key}.",
+    "listHeader": "Startup entries (tag: {tag})",
+    "listEmpty": "No managed startup entries found.",
+    "listRow": "  {method,-15} {name,-32} {target}",
+    "removeOk": "Removed '{name}' from {method}.",
+    "removeNotFound": "No managed entry named '{name}' found in any method.",
+    "removeFailed": "Failed to remove '{name}' from {method}: {error}",
+    "shortcutCreated": "Created shortcut: {path}",
+    "shortcutFailed": "Failed to create shortcut at '{path}': {error}",
+    "registryWritten": "Wrote {hive} value '{value}' = '{data}'",
+    "registryWriteFailed": "Failed to write {hive} value '{value}': {error}",
+    "taskCreated": "Created scheduled task '{taskName}' (trigger=ONLOGON, runLevel={runLevel})",
+    "taskCreateFailed": "schtasks /Create failed for '{taskName}' (exit {code}): {stderr}",
+    "summaryHeader": "Startup-Add Summary"
+  }
+}

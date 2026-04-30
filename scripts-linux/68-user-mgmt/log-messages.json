@@ -1,0 +1,114 @@
+{
+  "_comment": "Centralised log strings for 68-user-mgmt. Keep wording consistent across leaves so log scraping stays simple.",
+  "messages": {
+    "osDetectFail":        "could not detect OS: uname returned '%s' (failure: only Linux and macOS are supported)",
+    "needRoot":            "this operation needs root; re-run with sudo (failure: useradd/dscl require elevation)",
+    "missingTool":         "required tool not found: '%s' (failure: install it then retry)",
+    "userCreated":         "created user '%s' (uid=%s, primary group=%s)",
+    "userExists":          "user '%s' already exists -- skipping create (idempotent)",
+    "userCreateFail":      "failed to create user '%s' (failure: %s)",
+    "groupCreated":        "created group '%s' (gid=%s)",
+    "groupExists":         "group '%s' already exists -- skipping create (idempotent)",
+    "groupCreateFail":     "failed to create group '%s' (failure: %s)",
+    "groupAdded":          "added user '%s' to group '%s'",
+    "groupAddFail":        "failed to add user '%s' to group '%s' (failure: %s)",
+    "passwordSet":         "set password for user '%s' (masked: %s)",
+    "passwordSetFail":     "failed to set password for user '%s' (failure: %s)",
+    "passwordFileBadMode": "password file '%s' has mode '%s' (failure: must be 0600 or stricter; refusing to read)",
+    "passwordFileMissing": "password file '%s' not found (failure: cannot read)",
+    "jsonParseFail":       "JSON file '%s' is not valid JSON (failure: %s)",
+    "jsonShapeUnknown":    "JSON file '%s' is neither an object nor an array (failure: top-level must be {} or [])",
+    "jsonRecordBad":       "JSON record #%s in '%s' is missing required field '%s' (failure: skipping record)",
+    "noNameField":         "record has no 'name' field (failure: cannot identify target)",
+    "dryRunBanner":        "DRY RUN -- no changes will be applied",
+    "summaryHeader":       "=== 68-user-mgmt summary ===",
+    "summaryRow":          "  %-8s %-20s %s",
+    "sshKeyMalformed":     "ssh key looks malformed (does not start with a known algo): '%s' -- skipping this entry",
+    "sshKeyNoneValid":     "no valid ssh keys found among %s requested source(s) (--ssh-key/--ssh-key-file/--ssh-key-url) (failure: nothing to install)",
+    "sshHomeMissing":      "home dir '%s' does not exist for user '%s' -- skipping ssh key install (failure: create home first)",
+    "sshOwnerWarn":        "could not chown '%s' to '%s' -- file is in place but owner unchanged",
+    "sshKeyInstalled":     "installed ssh keys to '%s' (sources_requested=%s -> keys_parsed=%s -> keys_unique=%s -> keys_installed_new=%s; pre-existing keys preserved=%s)",
+    "sshKeySummaryRow":    "ssh-key summary for '%s': sources_requested=%s keys_parsed=%s keys_unique=%s keys_installed_new=%s preserved=%s",
+    "schemaFieldType":     "JSON record #%s in '%s' field '%s' has wrong type: expected %s, got %s (failure: rejecting record)",
+    "schemaFieldEmpty":    "JSON record #%s in '%s' field '%s' is empty/null (failure: rejecting record)",
+    "schemaArrayItemType": "JSON record #%s in '%s' field '%s[%s]' has wrong type: expected non-empty string, got %s (value=%s) (failure: rejecting record)",
+    "schemaUnknownField":  "JSON record #%s in '%s' has unknown field '%s' (warning: ignored -- check for typo; allowed fields: %s)",
+    "schemaRecordRejected":"JSON record #%s in '%s' (name='%s') rejected: %s validation error(s) -- see above (failure: not creating user)",
+    "schemaTopLevelType":  "JSON record #%s in '%s' is not an object: got %s (failure: rejecting record)",
+    "sshUrlFetched":       "fetched ssh key(s) from URL '%s' (HTTP %s, %s bytes, %s key(s) parsed)",
+    "sshUrlFetchFail":     "could not fetch ssh keys from URL '%s' (failure: %s -- skipping this URL)",
+    "sshUrlNotAllowed":    "ssh key URL host '%s' is not in the allowlist (failure: refusing to fetch from '%s'; allowed hosts: %s; pass --ssh-key-url-allowlist to extend)",
+    "sshUrlTooBig":        "ssh key URL '%s' returned more than %s bytes (failure: refusing oversized response; raise --ssh-key-url-max-bytes if intentional)",
+    "sshUrlInsecure":      "ssh key URL '%s' uses insecure scheme (failure: only https:// is allowed; pass --allow-insecure-url to override at your own risk)",
+    "sshUrlNoCurl":        "neither curl nor wget is on PATH -- cannot fetch ssh key URLs (failure: install curl)",
+    "manifestWritten":     "wrote ssh-key manifest '%s' (run-id=%s, user=%s, %s key(s) tracked)",
+    "manifestWriteFail":   "failed to write ssh-key manifest '%s' (failure: %s -- rollback for this run will not be possible)",
+    "manifestNotFound":    "ssh-key manifest not found for run-id '%s' (looked in '%s'; failure: cannot roll back -- list available runs with --list)",
+    "manifestParseFail":   "ssh-key manifest '%s' is not valid JSON (failure: %s)",
+    "manifestListHeader":  "=== tracked ssh-key runs (manifest dir: %s) ===",
+    "manifestListRow":     "  %-14s  %-19s  user=%-16s  keys=%s  source=%s",
+    "manifestListEmpty":   "no ssh-key manifests found in '%s' (nothing to roll back)",
+    "removeNoUser":        "user '%s' from manifest no longer exists on this host (failure: cannot edit their authorized_keys)",
+    "removeNoAuthKeys":    "authorized_keys file '%s' does not exist for user '%s' (nothing to roll back -- already clean)",
+    "removeKeyMissing":    "fingerprint '%s' from manifest not present in '%s' (skipping -- already removed or rotated)",
+    "removeKeyDropped":    "removed key fingerprint '%s' from '%s' (source=%s)",
+    "removeSummary":       "rollback complete for run-id '%s': %s tracked / %s removed / %s already-missing (file: %s)",
+    "removeWriteFail":     "failed to rewrite '%s' after rollback (failure: %s -- ORIGINAL FILE PRESERVED at '%s.bak.%s')",
+    "removeBackupMade":    "backed up '%s' to '%s' before rollback (restore with: mv '%s' '%s')"
+    ,"macHomeSeeded":       "seeded macOS home '%s' for user '%s' via createhomedir (mode 0755, owner %s:%s)"
+    ,"macHomeSeededFallback":"createhomedir not on PATH -- created '%s' as a bare dir for '%s' (mode 0755, owner %s:%s) (warning: no ~/Library skeleton)"
+    ,"macHomeSeedFail":     "failed to seed macOS home '%s' for user '%s' (failure: %s -- check 'createhomedir -c -u %s' manually)"
+    ,"macPgGidMissing":     "could not resolve numeric primary GID for user '%s' (failure: id/dscl returned nothing -- chown will use name '%s' as a fallback which may not match dscl)"
+    ,"sshChownNumeric":     "set ownership of '%s' to %s:%s (uid:gid resolved numerically -- safe across name/dscl drift)"
+    ,"manifestPruneHeader": "=== pruning ssh-key manifests in '%s' (policy: olderThanDays=%s, keepLastPerUser=%s, maxTotal=%s, dryRun=%s) ==="
+    ,"manifestPruneScanFail":"could not scan manifest dir '%s' (failure: %s -- skipping prune for this run)"
+    ,"manifestPruneSkipParse":"manifest '%s' is not valid JSON (failure: %s -- skipped, NOT deleted)"
+    ,"manifestPruneCandidate":"prune candidate '%s' (user=%s, age=%sd, reason=%s)"
+    ,"manifestPruneRemoved": "removed ssh-key manifest '%s' (reason=%s, dryRun=%s)"
+    ,"manifestPruneRemoveFail":"could not delete ssh-key manifest '%s' (failure: %s -- left in place; re-run with sudo or fix permissions)"
+    ,"manifestPruneSummary": "ssh-key manifest prune summary: scanned=%s kept=%s removed=%s failed=%s skipped=%s (dir=%s, dryRun=%s)"
+    ,"manifestPruneNothing": "no ssh-key manifests matched the prune policy in '%s' (nothing to remove)"
+    ,"manifestAutoPruneFail":"opportunistic ssh-key manifest prune failed (failure: %s -- continuing; install was successful, run 'remove-ssh-keys.sh --prune' manually to retry)"
+    ,"summaryJsonWritten":  "wrote ssh-key install summary JSON to '%s' (run-id=%s, user=%s, mode=%s)"
+    ,"summaryJsonWriteFail":"failed to write ssh-key install summary JSON to '%s' (failure: %s -- user creation succeeded; re-run with --summary-json=stdout to capture the data)"
+    ,"summaryJsonBatchWritten":"wrote batch ssh-key install summary JSON to '%s' (run-id=%s, %s user(s) aggregated)"
+    ,"summaryVerifyHeader":  "=== verify-summary scanning %s file(s) (strict=%s) ==="
+    ,"summaryVerifyBadJson": "summary JSON '%s' is not valid JSON (failure: %s)"
+    ,"summaryVerifyMissingField": "summary JSON '%s' is missing required field '%s' (failure: schema v1 %s doc requires it)"
+    ,"summaryVerifyBadCounter":"summary JSON '%s' counter '%s.%s' is invalid: %s (failure: counters must be non-negative integers)"
+    ,"summaryVerifyBatchMismatch":"summary JSON '%s' batch aggregate '%s' (%s) != sum across users (%s) (failure: rollup is inconsistent)"
+    ,"summaryVerifyTally":   "verify-summary: %s pass / %s warn / %s fail (of %s)"
+    ,"summaryDiscoveryBegin":     "discovering summary JSONs under root '%s' (patterns=%s, recursive=%s, followSymlinks=%s)"
+    ,"summaryDiscoveryMatch":     "  matched %s file(s) for pattern '%s'"
+    ,"summaryDiscoveryNone":      "no summary JSON files matched any glob under root '%s' (failure: nothing to validate -- check that add-user.sh ran with --summary-json, or supply --glob/--file)"
+    ,"summaryDiscoveryRootMissing":"discovery root '%s' does not exist (failure: create the dir or pass --root <existing-dir>)"
+    ,"summaryDiscoveryRootUnreadable":"discovery root '%s' is not readable (failure: re-run with sudo or fix dir mode 0700/0750)"
+    ,"summaryDiscoveryCapHit":    "discovery cap hit: stopped after %s file(s) (failure: raise summaryDiscovery.maxFiles in config.json or narrow --glob -- root='%s')"
+    ,"summaryDiscoveryTotal":     "discovery complete: %s unique file(s) from %s pattern(s) under root '%s'"
+    ,"summarySinceCutoff":        "applying since-cutoff: %s (epoch=%s, source=%s) -- only files with mtime > cutoff will be validated"
+    ,"summarySinceRunResolved":   "resolved since run-id '%s' to cutoff '%s' (epoch=%s) via %s"
+    ,"summarySinceRunUnresolved": "could not resolve since run-id '%s' to a cutoff (failure: no summary with that runId had a parseable writtenAt under '%s', and no manifest '%s/%s__*.json' was found -- pass an ISO-timestamp to --since instead)"
+    ,"summarySinceBadInput":      "since value '%s' is neither a recognised run-id (expected pattern YYYYMMDD-HHMMSS-<suffix>) nor a timestamp parseable by 'date -d' (failure: %s)"
+    ,"summarySinceFiltered":      "since-filter: kept %s file(s), skipped %s file(s) older than cutoff '%s'"
+    ,"summarySinceEmpty":         "since-filter removed every candidate (failure: 0 of %s file(s) had mtime > '%s' -- widen the cutoff or drop the --since flag)"
+    ,"editPlanHeader":     "edit-user plan for '%s':"
+    ,"editUserMissing":    "user '%s' does not exist -- nothing to edit (failure: create it first with add-user)"
+    ,"shellChanged":       "set login shell of '%s' to '%s'"
+    ,"shellChangeFail":    "failed to set login shell of '%s' to '%s' (failure: %s)"
+    ,"commentChanged":     "updated comment/RealName for '%s'"
+    ,"commentChangeFail":  "failed to update comment for '%s' (failure: %s)"
+    ,"accountEnabled":     "enabled (unlocked) account '%s'"
+    ,"accountEnableFail":  "failed to enable account '%s' (failure: %s)"
+    ,"accountDisabled":    "disabled (locked) account '%s'"
+    ,"accountDisableFail": "failed to disable account '%s' (failure: %s)"
+    ,"groupRemoved":       "removed user '%s' from group '%s'"
+    ,"groupRemoveFail":    "failed to remove user '%s' from group '%s' (failure: %s)"
+    ,"renameTargetExists": "rename target '%s' already exists (failure: pick a free name)"
+    ,"userRenamed":        "renamed user '%s' -> '%s'"
+    ,"renameFail":         "failed to rename user '%s' -> '%s' (failure: %s)"
+    ,"removePlanHeader":   "remove-user plan for '%s':"
+    ,"userRemoved":        "removed user '%s'"
+    ,"userRemoveFail":     "failed to remove user '%s' (failure: %s)"
+    ,"homeRemoved":        "deleted home directory '%s'"
+  }
+}

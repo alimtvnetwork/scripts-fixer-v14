@@ -1,0 +1,201 @@
+# 64-startup-add
+
+Cross-OS startup management on the Unix side (Linux + macOS).
+Mirrors the Windows-side `scripts/os/` startup block.
+
+## Subverbs
+
+| Subverb | Purpose |
+|---|---|
+| `app`    | Register an app to run at user login |
+| `env`    | Persist an environment variable (KEY=VALUE) |
+| `list`   | List all entries tagged `lovable-startup-*` |
+| `remove` | Remove a single entry by name (optionally scoped by `--method`) |
+| `duplicates` | Report identical entries registered through multiple methods or with identical bodies |
+
+## Methods
+
+### Linux
+| Method         | Where it writes                                            | Best for                 |
+|----------------|------------------------------------------------------------|--------------------------|
+| `autostart`    | `~/.config/autostart/lovable-startup-<name>.desktop`       | Default GUI desktop      |
+| `systemd-user` | `~/.config/systemd/user/lovable-startup-<name>.service`    | Headless / server / WSL  |
+| `shell-rc`     | Marker block in `~/.zshrc` or `~/.bashrc`                  | Terminal-only login      |
+
+### macOS
+| Method         | Where it writes                                            | Best for                 |
+|----------------|------------------------------------------------------------|--------------------------|
+| `launchagent`  | `~/Library/LaunchAgents/com.lovable-startup.<name>.plist`  | Default — survives reboot|
+| `login-item`   | System Events login items (via `osascript`)                | GUI apps that need Dock  |
+| `shell-rc`     | Marker block in `~/.zshrc` or `~/.bashrc`                  | Terminal-only login      |
+
+## Examples
+
+```bash
+# Add an app with default method (autostart on Linux GUI, launchagent on macOS)
+./run.sh -I 64 -- app /usr/local/bin/myapp --name myapp
+
+# Force shell-rc method on Linux
+./run.sh -I 64 -- app /usr/bin/tmux --name tmux --method shell-rc
+
+# Add an env var (default scope: user, default method: shell-rc)
+./run.sh -I 64 -- env "EDITOR=nvim"
+./run.sh -I 64 -- env "PATH_EXTRA=/opt/bin:/usr/local/bin"
+
+# macOS-only: set a var in the live launchd session AND mirror to shell-rc
+./run.sh -I 64 -- env "JAVA_HOME=/Library/Java/Home" --method launchctl
+
+# List everything we manage
+./run.sh -I 64 -- list
+
+# Remove every entry named "myapp" (across all methods)
+./run.sh -I 64 -- remove myapp --all
+
+# Remove only the autostart entry, leave shell-rc intact
+./run.sh -I 64 -- remove myapp --method autostart
+
+# Remove a single env var (its line in the env block; block stays for siblings)
+./run.sh -I 64 -- remove EDITOR --method shell-rc-env
+```
+
+## Interactive picker
+
+Run `remove` with no name (or `--interactive`/`-i`) to get a numbered table
+of all tagged entries and pick which to delete:
+
+```bash
+./run.sh -I 64 -- remove                # auto-interactive on a TTY
+./run.sh -I 64 -- remove --interactive  # explicit, works without TTY when piped
+```
+
+Selection grammar:
+- `1`             single index
+- `1,3,5`         comma-separated
+- `2-4`           inclusive range
+- `1,3-5`         mix
+- `all` / `*`     every listed entry
+- `q` / empty     cancel
+
+Combine with `--method` to scope the picker (e.g. only autostart entries),
+and `--yes` to skip the confirmation prompt (useful in scripts that pipe
+a fixed selection):
+
+```bash
+printf '1,3\n' | ./run.sh -I 64 -- remove -i --yes --method autostart
+```
+
+## Machine-readable output
+
+`list` defaults to a human table. Pass `--json` (or `--format=json`) for a
+stable JSON document you can pipe into `jq`, scripts, or CI:
+
+```bash
+./run.sh -I 64 -- list --json
+```
+
+```json
+{
+  "tag": "lovable-startup",
+  "count": 2,
+  "entries": [
+    { "method": "autostart",    "name": "demo",   "path": "/home/u/.config/autostart/lovable-startup-demo.desktop", "status": "active",   "scope": "user" },
+    { "method": "shell-rc-env", "name": "EDITOR", "path": "/home/u/.bashrc",                                          "status": "active",   "scope": "user" }
+  ]
+}
+```
+
+Schema is stable: `tag` (string), `count` (number), `entries[]` of
+`{method, name, path, status, scope}` strings. `status` is `"active"` when
+the underlying file exists on disk, `"orphaned"` otherwise. Empty list
+returns `{"tag":"...","count":0,"entries":[]}` with exit 0.
+
+### CSV export
+
+Pass `--csv` (or `--format=csv`) for an RFC 4180 CSV stream with the same
+columns: `method,name,path,status,scope`.
+
+```bash
+./run.sh -I 64 -- list --csv | column -t -s,
+```
+
+### Writing to a file
+
+Use `--output FILE` (alias `-o`) to redirect any format — `table`, `json`, or
+`csv` — straight to disk. Parent directories are created if missing, and the
+command fails fast with a clear error if the path is not writable.
+
+```bash
+./run.sh -I 64 -- list --json --output ~/reports/startup.json
+./run.sh -I 64 -- list --csv  --output ~/reports/startup.csv --method autostart
+./run.sh -I 64 -- list        --output ~/reports/startup.txt   # table to file
+```
+
+### Filtering by method
+
+Both table and JSON output support `--method <name>` to narrow results to a
+single registration type. The same family alias used by `remove` works here:
+`--method shell-rc` matches both `shell-rc-app` and `shell-rc-env`.
+
+```bash
+./run.sh -I 64 -- list --method autostart           # only autostart entries
+./run.sh -I 64 -- list --method systemd-user        # only systemd user units
+./run.sh -I 64 -- list --method shell-rc-env        # only env-var blocks
+./run.sh -I 64 -- list --json --method shell-rc     # JSON, app + env blocks
+```
+
+Unknown methods produce an empty result (exit 0), not an error.
+
+## Duplicates report
+
+`duplicates` (alias `dupes`) scans every tagged entry across all six
+registration methods and surfaces two kinds of collision:
+
+- **by-name** — the same logical name registered under two or more methods
+  (e.g. `demo` is both a `launchagent` *and* a `login-item`). Often a sign of
+  an aborted migration from one method to another.
+- **by-content** — the underlying file body hashes (sha256) to the same value
+  as another entry. Catches accidental copy/paste duplicates even when the
+  names differ. For shell-rc blocks the hash covers only the body of the
+  marker block; for `login-item` it hashes the bundle path string.
+
+```bash
+./run.sh -I 64 -- duplicates                     # human table
+./run.sh -I 64 -- duplicates --json              # machine-readable
+./run.sh -I 64 -- duplicates --csv > dupes.csv   # CSV stream
+./run.sh -I 64 -- duplicates --output ~/dupes.txt
+```
+
+Exit code is always 0; an empty report just means no duplicates were found.
+If `python3` is unavailable, the report falls back to name-based grouping
+only (no content hashing) and emits a warning.
+
+## Tag convention
+
+Every entry this script writes is tagged with the prefix `lovable-startup` so
+`list` and `remove` can find them across all 6 methods without false positives:
+
+- File names:    `lovable-startup-<name>.{desktop,service,plist}`
+- Plist labels:  `com.lovable-startup.<name>`
+- Login items:   `com.lovable-startup.<name>`
+- Shell blocks:  `# >>> lovable-startup-<name> (lovable-startup-app) >>>`
+- Env block:     `# >>> lovable-startup-env (managed) >>>`
+
+Override with `STARTUP_TAG_PREFIX=...` if you must coexist with other toolkits.
+
+## Headless Linux
+
+By default `systemd --user` units stop when the user logs out. To keep your
+startup entry running on a headless server:
+
+```bash
+STARTUP_LINGER=1 ./run.sh -I 64 -- app /usr/local/bin/myd --method systemd-user
+# (calls `loginctl enable-linger $USER` for you; needs sudo on first run)
+```
+
+## Idempotency & file-error rule
+
+- Re-running `app add ...` upserts: it removes the old file/block first.
+- All file/path failures call `log_file_error <path> <reason>` so you always
+  see the exact path that failed and why (CODE RED rule).
+- Sourcing the modified shell-rc is safe: env values are single-quoted with
+  the `'\''` idiom so spaces, `:`, `&`, and embedded quotes round-trip exactly.
