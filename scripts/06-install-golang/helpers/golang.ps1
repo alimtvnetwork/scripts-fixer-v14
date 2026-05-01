@@ -402,17 +402,16 @@ function Get-ChocoGoLibPath {
     try {
         if (-not $isLibPathPresent) {
             Write-Log (($msgs.chocoLibMissing -replace '\{pkg\}', $PackageName) -replace '\{root\}', $libRoot) -Level "warn"
-            # Still surface the tools/go expected path explicitly even though
-            # the lib folder is missing -- aids post-mortem on broken installs.
+            # tools/go layout is OPTIONAL -- newer chocolatey golang packages install
+            # Go to "C:\Program Files\Go" and skip the lib\golang\tools\go folder
+            # entirely. Only log it as info; do NOT raise CODE RED here, since the
+            # presence of go.exe on PATH (verified separately) is what actually matters.
             if (-not $isToolsGoPresent) {
-                Write-Log ($msgs.chocoLibToolsGoMissing -replace '\{toolspath\}', $toolsGo) -Level "warn"
-                Write-FileError -FilePath $toolsGo -Operation "probe-choco-tools-go" `
-                    -Reason "Expected Chocolatey tools/go folder for package '$PackageName' does not exist (parent lib folder $libPath also missing)." `
-                    -Module "Get-ChocoGoLibPath"
+                Write-Log ($msgs.chocoLibToolsGoMissing -replace '\{toolspath\}', $toolsGo) -Level "info"
             }
-            Write-FileError -FilePath $libPath -Operation "probe-choco-lib" `
-                -Reason "Chocolatey lib folder for package '$PackageName' does not exist." `
-                -Module "Get-ChocoGoLibPath"
+            # Likewise: missing lib folder is informational when go.exe works.
+            # The caller (Invoke-GoSetup) will already fail loudly if `go version`
+            # doesn't run. Don't flood CODE RED for an audit-only probe.
             return $result
         }
 
@@ -420,14 +419,14 @@ function Get-ChocoGoLibPath {
         $result.LibPath = $libPath
         Write-Log (($msgs.chocoLibFound -replace '\{pkg\}', $PackageName) -replace '\{libpath\}', $libPath) -Level "success"
 
-        # tools\go layout used by the golang chocolatey package
+        # tools\go layout used by older golang chocolatey packages -- optional.
+        # Newer packages (1.22+) install Go directly to "C:\Program Files\Go" and
+        # only leave a shim in the lib folder. Treat missing tools/go as info,
+        # not as a CODE RED file error -- go.exe being on PATH is the real signal.
         if ($isToolsGoPresent) {
             Write-Log ($msgs.chocoLibToolsFound -replace '\{toolspath\}', $toolsGo) -Level "info"
         } else {
-            Write-Log ($msgs.chocoLibToolsGoMissing -replace '\{toolspath\}', $toolsGo) -Level "warn"
-            Write-FileError -FilePath $toolsGo -Operation "probe-choco-tools-go" `
-                -Reason "Chocolatey lib folder for '$PackageName' exists at $libPath but tools/go subfolder is missing." `
-                -Module "Get-ChocoGoLibPath"
+            Write-Log ($msgs.chocoLibToolsGoMissing -replace '\{toolspath\}', $toolsGo) -Level "info"
         }
 
         # Try .nuspec first (cheap, no choco.exe spawn)
@@ -1029,18 +1028,62 @@ function Install-GoTools {
         $installPkg = $ToolsConfig.golangciLint.installPackage
         Write-Log ($msgs.golangciLintInstalling -replace '\{package\}', $installPkg) -Level "info"
 
-        try {
-            & go.exe install $installPkg 2>&1 | ForEach-Object {
-                if ($_ -and $_.ToString().Trim().Length -gt 0) { Write-Log $_ -Level "info" }
+        # Run `go install` and capture the FULL output so the real error tail is
+        # visible -- not just the in-progress "go: downloading ..." line. We rely
+        # on $LASTEXITCODE rather than try/catch because go.exe writes progress
+        # to stderr without throwing a terminating PowerShell error.
+        function Invoke-GoInstallOnce {
+            param([string]$Pkg, [string]$ProxyOverride)
+            $prevProxy = $env:GOPROXY
+            if ($ProxyOverride) { $env:GOPROXY = $ProxyOverride }
+            try {
+                $allLines = @()
+                & go.exe install $Pkg 2>&1 | ForEach-Object {
+                    $line = "$_"
+                    if ($line.Trim().Length -gt 0) {
+                        Write-Log $line -Level "info"
+                        $allLines += $line
+                    }
+                }
+                return [pscustomobject]@{
+                    ExitCode = $LASTEXITCODE
+                    Output   = ($allLines -join "`n")
+                    LastErr  = ($allLines | Where-Object { $_ -notmatch '^\s*go:\s+downloading\s+' } | Select-Object -Last 1)
+                }
+            } finally {
+                $env:GOPROXY = $prevProxy
             }
+        }
 
+        $attempt = Invoke-GoInstallOnce -Pkg $installPkg -ProxyOverride $null
+
+        # Retry once with GOPROXY=direct if it looks like a transient
+        # proxy.golang.org / network failure (very common in restricted networks).
+        $isProxyFailure = $attempt.ExitCode -ne 0 -and ($attempt.Output -match 'proxy\.golang\.org|i/o timeout|connection reset|TLS handshake|context deadline exceeded')
+        if ($isProxyFailure) {
+            Write-Log "go install failed via default proxy -- retrying with GOPROXY=direct" -Level "warn"
+            $attempt = Invoke-GoInstallOnce -Pkg $installPkg -ProxyOverride "direct"
+        }
+
+        if ($attempt.ExitCode -ne 0) {
+            $errMsg = if ([string]::IsNullOrWhiteSpace($attempt.LastErr)) { $attempt.Output } else { $attempt.LastErr }
+            if ([string]::IsNullOrWhiteSpace($errMsg)) { $errMsg = "go install exited with code $($attempt.ExitCode)" }
+            try {
+                Write-FileError -FilePath $installPkg -Operation "resolve" -Reason "go install failed (exit $($attempt.ExitCode)): $errMsg" -Module "Install-GoTools"
+            } catch {
+                Write-Log ("[CODE RED] go install failed for: {0} -- Reason: {1} [Module: Install-GoTools]" -f $installPkg, $errMsg) -Level "error"
+            }
+            Write-Log ($msgs.golangciLintFailed -replace '\{error\}', $errMsg) -Level "error"
+            Save-InstalledError -Name "golangci-lint" -ErrorMessage "$errMsg"
+            $isAllOk = $false
+        } else {
             # Refresh PATH so golangci-lint is found
             $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
 
             $lintCmd = Get-Command "golangci-lint" -ErrorAction SilentlyContinue
             $isLintMissing = -not $lintCmd
             if ($isLintMissing) {
-                Write-FileError -FilePath "golangci-lint" -Operation "resolve" -Reason "golangci-lint not found in PATH after go install" -Module "Install-GoTools"
+                Write-FileError -FilePath "golangci-lint" -Operation "resolve" -Reason "golangci-lint not found in PATH after go install (exit 0)" -Module "Install-GoTools"
                 Write-Log $msgs.golangciLintNotInPath -Level "warn"
                 $isAllOk = $false
             } else {
@@ -1048,25 +1091,6 @@ function Install-GoTools {
                 Write-Log ($msgs.golangciLintSuccess -replace '\{version\}', $lintVersion) -Level "success"
                 Save-InstalledRecord -Name "golangci-lint" -Version "$lintVersion".Trim() -Method "go-install"
             }
-        } catch {
-            # Capture original error FIRST so a downstream logging failure
-            # (e.g. older Write-FileError without "install" in its ValidateSet)
-            # cannot mask the real reason `go install` failed.
-            $originalError = $_
-            try {
-                # Use "resolve" instead of "install" because older shared
-                # logging helpers only allow the original CODE RED operation set.
-                # This keeps the exact package path + failure reason visible
-                # without letting the logger become the primary crash.
-                Write-FileError -FilePath $installPkg -Operation "resolve" -Reason "go install failed: $originalError" -Module "Install-GoTools"
-            } catch {
-                # Fallback: never let CODE RED logging hide the real go install error.
-                Write-Log ("[CODE RED] go install failed for: {0} -- Reason: {1} [Module: Install-GoTools]" -f $installPkg, $originalError) -Level "error"
-                Write-Log ("Write-FileError fallback used for: {0} -- Reason: {1}" -f $installPkg, $_) -Level "warn"
-            }
-            Write-Log ($msgs.golangciLintFailed -replace '\{error\}', $originalError) -Level "error"
-            Save-InstalledError -Name "golangci-lint" -ErrorMessage "$originalError"
-            $isAllOk = $false
         }
     } else {
         Write-Log $msgs.golangciLintDisabled -Level "info"
