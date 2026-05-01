@@ -47,13 +47,23 @@ function Install-Pnpm {
         # Upgrade to latest
         Write-Log $LogMessages.messages.pnpmUpgrading -Level "info"
         try {
-            & npm install -g pnpm@latest 2>$null
+            $r = Invoke-NpmGlobalInstall -PackageSpec "pnpm@latest"
+            if (-not $r.Success) { throw $r.Error }
+            if ($r.Recovered) {
+                Write-Log "pnpm upgraded under fallback npm prefix '$($r.PrefixUsed)'." -Level "warn"
+                if (-not (Test-InPath -Directory $r.PrefixUsed)) {
+                    Add-ToUserPath -Directory $r.PrefixUsed
+                    $env:Path = "$env:Path;$($r.PrefixUsed)"
+                }
+            }
             $newVersion = & pnpm --version 2>$null
             Write-Log ($LogMessages.messages.pnpmUpgradeSuccess -replace '\{version\}', $newVersion) -Level "success"
             Save-InstalledRecord -Name "pnpm" -Version $newVersion -Method "npm"
+            return $true
         } catch {
             Write-Log "pnpm upgrade failed: $_" -Level "error"
             Save-InstalledError -Name "pnpm" -ErrorMessage "$_" -Method "npm"
+            return $false
         }
     }
     else {
@@ -61,17 +71,31 @@ function Install-Pnpm {
         try {
             # Refresh PATH so the updated npm prefix from script 03 is visible
             $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
-            & npm install -g pnpm 2>$null
+            $r = Invoke-NpmGlobalInstall -PackageSpec "pnpm"
+            if (-not $r.Success) { throw $r.Error }
+            if ($r.Recovered) {
+                Write-Log "pnpm installed under fallback npm prefix '$($r.PrefixUsed)'." -Level "warn"
+            }
 
-            # Refresh PATH
+            # Refresh PATH and ensure the (possibly new) prefix is on it
             $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+            if ($r.PrefixUsed -and -not (Test-InPath -Directory $r.PrefixUsed)) {
+                Add-ToUserPath -Directory $r.PrefixUsed
+                $env:Path = "$env:Path;$($r.PrefixUsed)"
+            }
 
             $installedVersion = & pnpm --version 2>$null
+            $hasInstalledVersion = -not [string]::IsNullOrWhiteSpace($installedVersion)
+            if (-not $hasInstalledVersion) {
+                throw "npm install -g pnpm reported success (under prefix '$($r.PrefixUsed)') but 'pnpm --version' did not run. PATH may need a fresh shell."
+            }
             Write-Log ($LogMessages.messages.pnpmInstallSuccess -replace '\{version\}', $installedVersion) -Level "success"
             Save-InstalledRecord -Name "pnpm" -Version $installedVersion -Method "npm"
+            return $true
         } catch {
             Write-Log "pnpm install failed: $_" -Level "error"
             Save-InstalledError -Name "pnpm" -ErrorMessage "$_" -Method "npm"
+            return $false
         }
     }
 }
