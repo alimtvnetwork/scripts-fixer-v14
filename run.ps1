@@ -2780,6 +2780,11 @@ Invoke-GitPull -RepoRoot $RootDir
 
 # ── Set flag so child scripts skip git pull ──────────────────────────
 $env:SCRIPTS_ROOT_RUN = "1"
+if ($Y) {
+    $env:SCRIPTS_AUTO_YES = "1"
+} else {
+    Remove-Item Env:\SCRIPTS_AUTO_YES -ErrorAction SilentlyContinue
+}
 
 # ── Handle install keyword mode (bare or named) ─────────────────────
 $hasInstallKeywords = $null -ne $Install -and $Install.Count -gt 0
@@ -2991,6 +2996,7 @@ if ($hasInstallKeywords) {
     }
 
     Remove-Item Env:\SCRIPTS_ROOT_RUN -ErrorAction SilentlyContinue
+    Remove-Item Env:\SCRIPTS_AUTO_YES -ErrorAction SilentlyContinue
     Show-VersionFooter
     exit 0
 }
@@ -3057,4 +3063,5 @@ if ($isScriptFailed) {
 
 # ── Clean up env flag ────────────────────────────────────────────────
 Remove-Item Env:\SCRIPTS_ROOT_RUN -ErrorAction SilentlyContinue
+Remove-Item Env:\SCRIPTS_AUTO_YES -ErrorAction SilentlyContinue
 Show-VersionFooter

@@ -182,6 +182,13 @@ function Resolve-SmartDevDir {
         return "${bestDrive}:\dev-tool"
     }
 
+    $isAutoYes = $env:SCRIPTS_AUTO_YES -eq '1'
+    if ($isAutoYes) {
+        $fallbackPath = Get-SafeDevDirFallback
+        Write-Log ($slm.messages.devDirFallback -replace '\{path\}', $fallbackPath) -Level "warn"
+        return $fallbackPath
+    }
+
     # No qualified drive found -- prompt user
     Write-Host ""
     Write-Host "  No drive with $($script:MinFreeSpaceGB) GB free space found (checked E:, D:, others)." -ForegroundColor Yellow

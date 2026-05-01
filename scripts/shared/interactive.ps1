@@ -50,6 +50,10 @@ function Read-PromptWithDefault {
         [Parameter()]          [string] $Default = '',
         [Parameter()]          [scriptblock] $Validator = $null
     )
+    $isAutoYes = $env:SCRIPTS_AUTO_YES -eq '1'
+    if ($isAutoYes) {
+        return $Default
+    }
     $isInteractive = [Environment]::UserInteractive -and $Host.UI -and $Host.Name -ne 'Default Host'
     if (-not $isInteractive) {
         Write-Host ("  [non-interactive] {0} -> using default '{1}'" -f $Label, $Default) -ForegroundColor DarkYellow

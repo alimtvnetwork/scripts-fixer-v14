@@ -840,7 +840,7 @@ function Invoke-ModelInstaller {
     $defaultModelsDir = Join-Path $DevDir $DefaultModelsSubfolder
 
     $modelsDir = $defaultModelsDir
-    $isOrchestratorRun = $env:SCRIPTS_ROOT_RUN -eq "1"
+    $isOrchestratorRun = $env:SCRIPTS_ROOT_RUN -eq "1" -or $env:SCRIPTS_AUTO_YES -eq "1"
 
     if (-not $isOrchestratorRun) {
         Write-Host ""

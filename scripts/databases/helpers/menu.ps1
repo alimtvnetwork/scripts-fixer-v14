@@ -166,6 +166,13 @@ function Get-InstallPath {
         $LogMessages
     )
 
+    $isAutoYes = $env:SCRIPTS_AUTO_YES -eq '1'
+    if ($isAutoYes) {
+        $dbPath = Join-Path $DevDir "databases"
+        Write-Log ($LogMessages.messages.installPathChosen -replace '\{path\}', $dbPath) -Level "info"
+        return $dbPath
+    }
+
     Write-Host ""
     Write-Host "  $($LogMessages.messages.installPathTitle)" -ForegroundColor Yellow
     Write-Host ""

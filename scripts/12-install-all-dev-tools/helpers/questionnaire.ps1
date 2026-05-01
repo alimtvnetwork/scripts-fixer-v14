@@ -21,6 +21,10 @@ function Show-QuickMenu {
     #>
     param($LogMessages)
 
+    if ($env:SCRIPTS_AUTO_YES -eq '1') {
+        return "alldev"
+    }
+
     Write-Host ""
     Write-Host "  What would you like to do?" -ForegroundColor Cyan
     Write-Host "  ===========================" -ForegroundColor DarkGray
@@ -85,6 +89,10 @@ function Invoke-Questionnaire {
     Write-Host "  Configuration" -ForegroundColor Cyan
     Write-Host "  ------------" -ForegroundColor DarkGray
     Write-Host ""
+
+    if ($env:SCRIPTS_AUTO_YES -eq '1') {
+        $UseDefaults = $true
+    }
 
     # ── Q1: Dev directory ────────────────────────────────────────────────────
     $defaultDevDir = $Config.devDir.default
