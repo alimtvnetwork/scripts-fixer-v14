@@ -3050,7 +3050,11 @@ if ($Defaults -and -not $Y) {
 $result = Invoke-ScriptById -ScriptId $I -ExtraArgs $scriptArgs
 
 $isScriptFailed = -not $result
-if ($isScriptFailed) { exit 1 }
+if ($isScriptFailed) {
+    Show-VersionFooter
+    exit 1
+}
 
 # ── Clean up env flag ────────────────────────────────────────────────
 Remove-Item Env:\SCRIPTS_ROOT_RUN -ErrorAction SilentlyContinue
+Show-VersionFooter
