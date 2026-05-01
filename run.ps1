@@ -2991,6 +2991,7 @@ if ($hasInstallKeywords) {
     }
 
     Remove-Item Env:\SCRIPTS_ROOT_RUN -ErrorAction SilentlyContinue
+    Show-VersionFooter
     exit 0
 }
 
