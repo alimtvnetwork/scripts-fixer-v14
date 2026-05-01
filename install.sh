@@ -13,15 +13,65 @@
 set -e
 
 OWNER="alimtvnetwork"
-REPO_SLUG="scripts-fixer-v14"  # single source of truth for this repo generation
-if [[ ! "$REPO_SLUG" =~ ^(.+)-v([0-9]+)$ ]]; then
-    echo "  [ERROR] Invalid repo slug in installer: $REPO_SLUG"
+# Repo slug is auto-derived so this file never needs hand-editing on a
+# vN -> v(N+1) bump. Detection order:
+#   1. The URL the user piped into bash (scraped from the parent process
+#      command line via /proc or `ps`) -- works for the canonical
+#      `curl -fsSL https://.../scripts-fixer-vNN/main/install.sh | bash` flow.
+#   2. The script path on disk (./install.sh from a clone), walking
+#      parents to find a `scripts-fixer-vNN` folder.
+#   3. The literal fallback below -- only used if both probes fail.
+FALLBACK_SLUG="scripts-fixer-v14"
+SLUG_RE='(scripts-fixer)-v([0-9]+)'
+
+REPO_SLUG=""
+SLUG_SOURCE="fallback"
+
+# 1. Parent process command line (catches `curl ... | bash` URLs)
+_parent_cmdline=""
+if [ -r "/proc/$PPID/cmdline" ]; then
+    _parent_cmdline="$(tr '\0' ' ' < "/proc/$PPID/cmdline" 2>/dev/null || true)"
+fi
+if [ -z "$_parent_cmdline" ] && command -v ps >/dev/null 2>&1; then
+    _parent_cmdline="$(ps -o command= -p "$PPID" 2>/dev/null || true)"
+fi
+for _h in "$_parent_cmdline" "${BASH_SOURCE[0]:-}" "$0"; do
+    if [[ "$_h" =~ $SLUG_RE ]]; then
+        REPO_SLUG="${BASH_REMATCH[1]}-v${BASH_REMATCH[2]}"
+        SLUG_SOURCE="invocation"
+        break
+    fi
+done
+
+# 2. On-disk script path -- walk up looking for scripts-fixer-vNN folder
+if [ -z "$REPO_SLUG" ]; then
+    _script_path="${BASH_SOURCE[0]:-$0}"
+    if [ -n "$_script_path" ] && [ -e "$_script_path" ]; then
+        _dir="$(cd "$(dirname "$_script_path")" 2>/dev/null && pwd || true)"
+        while [ -n "$_dir" ] && [ "$_dir" != "/" ]; do
+            _leaf="$(basename "$_dir")"
+            if [[ "$_leaf" =~ ^${SLUG_RE}$ ]]; then
+                REPO_SLUG="$_leaf"
+                SLUG_SOURCE="path"
+                break
+            fi
+            _dir="$(dirname "$_dir")"
+        done
+    fi
+fi
+
+# 3. Hard fallback
+[ -z "$REPO_SLUG" ] && REPO_SLUG="$FALLBACK_SLUG"
+
+if [[ ! "$REPO_SLUG" =~ ^${SLUG_RE}$ ]]; then
+    echo "  [ERROR] Invalid repo slug resolved by installer: $REPO_SLUG"
     exit 1
 fi
 BASE="${BASH_REMATCH[1]}"
 CURRENT="${BASH_REMATCH[2]}"
 FALLBACK="$HOME/scripts-fixer"
 REPO="https://github.com/$OWNER/$REPO_SLUG.git"
+echo "  [SLUG]   $REPO_SLUG  (source: $SLUG_SOURCE)"
 
 PROBE_MAX="${SCRIPTS_FIXER_PROBE_MAX:-30}"
 if ! [[ "$PROBE_MAX" =~ ^[0-9]+$ ]] || [ "$PROBE_MAX" -lt 1 ] || [ "$PROBE_MAX" -gt 100 ]; then
