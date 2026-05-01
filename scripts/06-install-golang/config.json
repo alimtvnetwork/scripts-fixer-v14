@@ -32,9 +32,10 @@
         "promptOnFirstRun": false
       },
       "GOPRIVATE": {
-        "enabled": true,
+        "_comment": "Disabled by default. Set enabled=true and provide a value (e.g. 'github.com/your-org/*') to allow Go to bypass the module proxy for private repos.",
+        "enabled": false,
         "value": "",
-        "promptOnFirstRun": true
+        "promptOnFirstRun": false
       }
     }
   },
