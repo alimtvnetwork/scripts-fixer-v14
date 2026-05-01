@@ -14,7 +14,7 @@ set -e
 
 OWNER="alimtvnetwork"
 BASE="scripts-fixer"
-CURRENT=13  # <-- bump this when this file is copied into a new -vN repo
+CURRENT=14  # <-- bump this when this file is copied into a new -vN repo
 FALLBACK="$HOME/scripts-fixer"
 REPO="https://github.com/$OWNER/$BASE-v$CURRENT.git"
 
