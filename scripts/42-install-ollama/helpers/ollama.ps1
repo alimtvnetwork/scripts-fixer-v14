@@ -96,8 +96,9 @@ function Configure-OllamaModels {
 
     # Prompt user if configured (skip under orchestrator)
     $isOrchestratorRun = $env:SCRIPTS_ROOT_RUN -eq "1"
+    $isAutoYes = $env:SCRIPTS_AUTO_YES -eq "1"
     $isPromptEnabled = $modelsCfg.promptForDirectory
-    if ($isPromptEnabled -and -not $isOrchestratorRun) {
+    if ($isPromptEnabled -and -not $isOrchestratorRun -and -not $isAutoYes) {
         Write-Host ""
         Write-Host "  Default models directory: $defaultModelsDir" -ForegroundColor Cyan
         $userInput = Read-Host -Prompt "  $($LogMessages.messages.modelsDirPrompt) [$defaultModelsDir]"
@@ -105,7 +106,7 @@ function Configure-OllamaModels {
         if ($hasUserInput) {
             $modelsDir = $userInput.Trim()
         }
-    } elseif ($isOrchestratorRun) {
+    } elseif ($isOrchestratorRun -or $isAutoYes) {
         Write-Log "Orchestrator mode: using default models directory: $defaultModelsDir" -Level "info"
     }
 
@@ -138,7 +139,7 @@ function Pull-OllamaModels {
     )
 
     $models = $Config.defaultModels
-    $isOrchestratorRun = $env:SCRIPTS_ROOT_RUN -eq "1"
+    $isOrchestratorRun = $env:SCRIPTS_ROOT_RUN -eq "1" -or $env:SCRIPTS_AUTO_YES -eq "1"
 
     # -- Honor OLLAMA_PULL_MODELS env var (set by scripts/models orchestrator) --
     # When present, restrict the pull list to the given CSV slugs and run
