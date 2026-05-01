@@ -1,6 +1,6 @@
 ---
 name: Install bootstrap auto-discovery
-description: install.ps1/install.sh probe parallel for newer scripts-fixer-vN repos, redirect, then fresh-clone. Includes -Version flag.
+description: install.ps1/install.sh auto-derive repo slug from invocation URL / on-disk path (fallback constant only), probe parallel for newer scripts-fixer-vN repos, redirect, then fresh-clone. Includes -Version flag.
 type: feature
 ---
 
@@ -10,7 +10,12 @@ type: feature
 
 `install.ps1` (Windows) and `install.sh` (Unix/macOS) both:
 
-1. **Derive current version from one repo slug constant**: `scripts-fixer-vN` → `current = N`; never keep a separate hardcoded numeric `current` / `CURRENT` that can drift from the repo URL
+1. **Auto-derive `repoSlug` / `REPO_SLUG`** at runtime, in this order:
+   a. Scrape `scripts-fixer-vN` from the invocation URL (PS: `$MyInvocation.Line` + parent process `CommandLine` via CIM; bash: `/proc/$PPID/cmdline` then `ps -o command= -p $PPID`). Catches the canonical `irm | iex` / `curl | bash` flow.
+   b. Walk parent dirs of the on-disk script path looking for a `scripts-fixer-vN` folder. Catches `pwsh ./install.ps1` from a clone.
+   c. Hard-coded `fallbackSlug` / `FALLBACK_SLUG` constant -- only fires if both probes fail. Bumping this constant on a vN -> v(N+1) cut is **belt-and-suspenders**, not required for correctness.
+   The chosen source is logged as `[SLUG]   scripts-fixer-vNN  (source: invocation|path|fallback)`.
+   Derive `current = N` from the resolved slug; never keep a separate hardcoded numeric value.
 2. **Probe in parallel** v(N+1)..v(N+30) (default; configurable via `SCRIPTS_FIXER_PROBE_MAX`, max 100) — fail-fast HTTP HEAD with 5s timeout
 3. **Pick the highest** that returned 200
 4. **Redirect** by re-invoking that newer repo's `install.{ps1,sh}` and exiting; sets `SCRIPTS_FIXER_REDIRECTED=1` as loop guard
