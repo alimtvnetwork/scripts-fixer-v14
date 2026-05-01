@@ -14,15 +14,75 @@
     $ErrorActionPreference = "Stop"
 
     # ----- Configuration ----------------------------------------------------
-    $owner    = "alimtvnetwork"
-    $baseName = "scripts-fixer"
-    $repoSlug = "scripts-fixer-v14"  # single source of truth for this repo generation
-    if ($repoSlug -notmatch '^(.+)-v([0-9]+)$') {
-        Write-Host "  [ERROR] Invalid repo slug in installer: $repoSlug" -ForegroundColor Red
+    #  Repo slug is auto-derived so this file never needs hand-editing on a
+    #  vN -> v(N+1) bump. Detection order:
+    #    1. The URL the user piped into iex (scraped from $MyInvocation.Line
+    #       and the parent process command line) -- works for the canonical
+    #       `irm https://.../scripts-fixer-vNN/main/install.ps1 | iex` flow.
+    #    2. The script path on disk (`pwsh ./install.ps1` from a clone),
+    #       walking parents to find a `scripts-fixer-vNN` folder.
+    #    3. The literal fallback below -- only used if both probes fail
+    #       (e.g. someone pasted the file body into a REPL with no context).
+    $owner          = "alimtvnetwork"
+    $fallbackSlug   = "scripts-fixer-v14"
+    $slugPattern    = '(scripts-fixer)-v([0-9]+)'
+
+    $repoSlug   = $null
+    $slugSource = "fallback"
+
+    # 1. URL piped into iex
+    $haystacks = @()
+    if ($MyInvocation -and $MyInvocation.Line)              { $haystacks += $MyInvocation.Line }
+    if ($MyInvocation -and $MyInvocation.MyCommand -and $MyInvocation.MyCommand.Definition) {
+        $haystacks += $MyInvocation.MyCommand.Definition
+    }
+    try {
+        $parent = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID" -ErrorAction Stop).ParentProcessId
+        if ($parent) {
+            $parentCmd = (Get-CimInstance Win32_Process -Filter "ProcessId=$parent" -ErrorAction Stop).CommandLine
+            if ($parentCmd) { $haystacks += $parentCmd }
+        }
+    } catch { }
+
+    foreach ($h in $haystacks) {
+        if ($h -match $slugPattern) {
+            $repoSlug   = "$($Matches[1])-v$($Matches[2])"
+            $slugSource = "invocation"
+            break
+        }
+    }
+
+    # 2. On-disk script path
+    if (-not $repoSlug) {
+        $scriptPath = $null
+        if ($PSCommandPath)                                              { $scriptPath = $PSCommandPath }
+        elseif ($MyInvocation -and $MyInvocation.MyCommand.Path)         { $scriptPath = $MyInvocation.MyCommand.Path }
+        if ($scriptPath -and (Test-Path $scriptPath)) {
+            $dir = Split-Path -Parent $scriptPath
+            while ($dir -and -not $repoSlug) {
+                $leaf = Split-Path -Leaf $dir
+                if ($leaf -match "^$slugPattern$") {
+                    $repoSlug   = $leaf
+                    $slugSource = "path"
+                    break
+                }
+                $parentDir = Split-Path -Parent $dir
+                if ($parentDir -eq $dir) { break }
+                $dir = $parentDir
+            }
+        }
+    }
+
+    # 3. Hard fallback
+    if (-not $repoSlug) { $repoSlug = $fallbackSlug }
+
+    if ($repoSlug -notmatch "^$slugPattern$") {
+        Write-Host "  [ERROR] Invalid repo slug resolved by installer: $repoSlug" -ForegroundColor Red
         return
     }
     $baseName = $Matches[1]
     $current  = [int]$Matches[2]
+    Write-Host "  [SLUG]   $repoSlug  (source: $slugSource)" -ForegroundColor DarkGray
     $repo     = "https://github.com/$owner/$repoSlug.git"
     # NOTE: $folder is resolved later -- it is CWD-aware (see Resolve-TargetFolder).
     # Fallback only kicks in when CWD is a protected/system directory.
