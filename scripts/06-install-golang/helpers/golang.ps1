@@ -402,17 +402,16 @@ function Get-ChocoGoLibPath {
     try {
         if (-not $isLibPathPresent) {
             Write-Log (($msgs.chocoLibMissing -replace '\{pkg\}', $PackageName) -replace '\{root\}', $libRoot) -Level "warn"
-            # Still surface the tools/go expected path explicitly even though
-            # the lib folder is missing -- aids post-mortem on broken installs.
+            # tools/go layout is OPTIONAL -- newer chocolatey golang packages install
+            # Go to "C:\Program Files\Go" and skip the lib\golang\tools\go folder
+            # entirely. Only log it as info; do NOT raise CODE RED here, since the
+            # presence of go.exe on PATH (verified separately) is what actually matters.
             if (-not $isToolsGoPresent) {
-                Write-Log ($msgs.chocoLibToolsGoMissing -replace '\{toolspath\}', $toolsGo) -Level "warn"
-                Write-FileError -FilePath $toolsGo -Operation "probe-choco-tools-go" `
-                    -Reason "Expected Chocolatey tools/go folder for package '$PackageName' does not exist (parent lib folder $libPath also missing)." `
-                    -Module "Get-ChocoGoLibPath"
+                Write-Log ($msgs.chocoLibToolsGoMissing -replace '\{toolspath\}', $toolsGo) -Level "info"
             }
-            Write-FileError -FilePath $libPath -Operation "probe-choco-lib" `
-                -Reason "Chocolatey lib folder for package '$PackageName' does not exist." `
-                -Module "Get-ChocoGoLibPath"
+            # Likewise: missing lib folder is informational when go.exe works.
+            # The caller (Invoke-GoSetup) will already fail loudly if `go version`
+            # doesn't run. Don't flood CODE RED for an audit-only probe.
             return $result
         }
 
@@ -420,14 +419,14 @@ function Get-ChocoGoLibPath {
         $result.LibPath = $libPath
         Write-Log (($msgs.chocoLibFound -replace '\{pkg\}', $PackageName) -replace '\{libpath\}', $libPath) -Level "success"
 
-        # tools\go layout used by the golang chocolatey package
+        # tools\go layout used by older golang chocolatey packages -- optional.
+        # Newer packages (1.22+) install Go directly to "C:\Program Files\Go" and
+        # only leave a shim in the lib folder. Treat missing tools/go as info,
+        # not as a CODE RED file error -- go.exe being on PATH is the real signal.
         if ($isToolsGoPresent) {
             Write-Log ($msgs.chocoLibToolsFound -replace '\{toolspath\}', $toolsGo) -Level "info"
         } else {
-            Write-Log ($msgs.chocoLibToolsGoMissing -replace '\{toolspath\}', $toolsGo) -Level "warn"
-            Write-FileError -FilePath $toolsGo -Operation "probe-choco-tools-go" `
-                -Reason "Chocolatey lib folder for '$PackageName' exists at $libPath but tools/go subfolder is missing." `
-                -Module "Get-ChocoGoLibPath"
+            Write-Log ($msgs.chocoLibToolsGoMissing -replace '\{toolspath\}', $toolsGo) -Level "info"
         }
 
         # Try .nuspec first (cheap, no choco.exe spawn)
