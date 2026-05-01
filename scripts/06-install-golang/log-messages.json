@@ -81,6 +81,7 @@
     "goEnvCreatingDir": "Creating directory for {key} -- {path}",
     "goEnvUserProvided": "User provided value for {key} -- {value}",
     "goEnvNoValue": "No value resolved for go env {key} -- skipping",
+    "goEnvNoValueOptional": "go env {key} is intentionally empty in config (and no prompt available) -- skipping. This is fine; set a non-empty 'value' in config to enable.",
     "goInstallFailed": "Go install failed -- cannot continue",
     "gopathInitFailed": "Failed to initialize GOPATH",
     "goVetChecking": "Checking go vet availability in a temporary module...",
