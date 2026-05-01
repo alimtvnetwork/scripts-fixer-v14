@@ -8,6 +8,10 @@ $_loggingPath = Join-Path $_sharedDir "logging.ps1"
 if ((Test-Path $_loggingPath) -and -not (Get-Command Write-Log -ErrorAction SilentlyContinue)) {
     . $_loggingPath
 }
+$_npmUtilsPath = Join-Path $_sharedDir "npm-utils.ps1"
+if ((Test-Path $_npmUtilsPath) -and -not (Get-Command Invoke-NpmGlobalInstall -ErrorAction SilentlyContinue)) {
+    . $_npmUtilsPath
+}
 
 
 function Install-NodeJs {
@@ -68,6 +72,81 @@ function Install-NodeJs {
     }
 }
 
+function Test-NpmPrefixWritable {
+    <#
+    .SYNOPSIS
+        Verifies that the requested npm global prefix path:
+          1) lives on a drive that exists,
+          2) can be created (or already exists), and
+          3) accepts a probe file write (catches AV/file-system filter
+             blocks that otherwise surface as 'errno -4094 UNKNOWN' from
+             npm's bundled libuv mkdir).
+
+        Returns a hashtable: Ok (bool), Reason (string), ProbeFile (string).
+        On failure ALWAYS logs a CODE RED Write-FileError with the exact
+        path and reason so the user can see WHY the fallback kicked in.
+    #>
+    param(
+        [Parameter(Mandatory)] [string]$PrefixPath
+    )
+
+    $result = @{ Ok = $false; Reason = $null; ProbeFile = $null }
+
+    # Drive existence check
+    try {
+        $driveQualifier = [System.IO.Path]::GetPathRoot($PrefixPath)
+        $hasDrive = -not [string]::IsNullOrWhiteSpace($driveQualifier)
+        if ($hasDrive -and -not (Test-Path -LiteralPath $driveQualifier)) {
+            $result.Reason = "Drive '$driveQualifier' does not exist or is not mounted in this session."
+            Write-FileError -FilePath $PrefixPath -Operation "probe-prefix-drive" -Reason $result.Reason -Module "Test-NpmPrefixWritable"
+            return $result
+        }
+    } catch {
+        $result.Reason = "Could not parse drive root: $_"
+        Write-FileError -FilePath $PrefixPath -Operation "probe-prefix-drive" -Reason $result.Reason -Module "Test-NpmPrefixWritable"
+        return $result
+    }
+
+    # Create directory (idempotent)
+    if (-not (Test-Path -LiteralPath $PrefixPath)) {
+        try {
+            New-Item -Path $PrefixPath -ItemType Directory -Force -ErrorAction Stop | Out-Null
+        } catch {
+            $result.Reason = "Cannot create directory: $_"
+            Write-FileError -FilePath $PrefixPath -Operation "create-prefix-dir" -Reason $result.Reason -Module "Test-NpmPrefixWritable"
+            return $result
+        }
+    }
+
+    # Write probe -- catches AV / filter / permission blocks that npm hits as errno -4094
+    $probe = Join-Path $PrefixPath (".scripts-fixer-probe-{0}.tmp" -f ([guid]::NewGuid().ToString("N")))
+    try {
+        Set-Content -LiteralPath $probe -Value "probe" -Encoding ASCII -ErrorAction Stop
+        Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue
+        $result.Ok = $true
+        $result.ProbeFile = $probe
+        return $result
+    } catch {
+        $result.Reason = "Directory exists but is not writable (probe failed: $_). This usually means antivirus, a file-system filter, or a different identity owns the folder."
+        Write-FileError -FilePath $probe -Operation "probe-prefix-write" -Reason $result.Reason -Module "Test-NpmPrefixWritable"
+        return $result
+    }
+}
+
+function Get-NpmDefaultPrefix {
+    <#
+    .SYNOPSIS
+        npm's documented Windows default global prefix when no override is set:
+        %APPDATA%\npm. Used as a fallback when the configured prefix is not
+        usable so global installs (yarn, pnpm) can still succeed.
+    #>
+    $appData = $env:APPDATA
+    if ([string]::IsNullOrWhiteSpace($appData)) {
+        $appData = Join-Path $env:USERPROFILE "AppData\Roaming"
+    }
+    return (Join-Path $appData "npm")
+}
+
 function Configure-NpmPrefix {
     param(
         $Config,
@@ -80,16 +159,34 @@ function Configure-NpmPrefix {
     if ($isSetPrefixDisabled) { return }
 
     # Resolve prefix path
-    $prefixPath = if ($DevDir) {
+    $requestedPrefix = if ($DevDir) {
         Join-Path $DevDir $Config.devDirSubfolder
     } else {
         $npmConfig.globalPrefix
     }
 
-    # Ensure directory exists
-    $isDirMissing = -not (Test-Path $prefixPath)
-    if ($isDirMissing) {
-        New-Item -Path $prefixPath -ItemType Directory -Force | Out-Null
+    # Probe the requested prefix BEFORE telling npm to use it. If it's not
+    # writable we fall back to npm's default ($APPDATA\npm) so downstream
+    # `npm install -g ...` calls (yarn, pnpm, etc.) don't crash with
+    # errno -4094 / UNKNOWN: mkdir.
+    $probe = Test-NpmPrefixWritable -PrefixPath $requestedPrefix
+    if ($probe.Ok) {
+        $prefixPath = $requestedPrefix
+    } else {
+        $fallback = Get-NpmDefaultPrefix
+        Write-Log "Requested npm prefix '$requestedPrefix' is not usable -- $($probe.Reason)" -Level "warn"
+        Write-Log "Falling back to npm default prefix: $fallback" -Level "warn"
+        # Make sure the fallback itself is usable; if it isn't there's nothing
+        # we can do but surface the error loudly.
+        $probe2 = Test-NpmPrefixWritable -PrefixPath $fallback
+        if (-not $probe2.Ok) {
+            Write-FileError -FilePath $fallback -Operation "fallback-prefix" `
+                -Reason "Both requested prefix and npm default fallback are unwritable. $($probe2.Reason)" `
+                -Module "Configure-NpmPrefix"
+            # Return $null so callers know npm prefix is not configured.
+            return $null
+        }
+        $prefixPath = $fallback
     }
 
     # Check current prefix
@@ -173,23 +270,23 @@ function Install-NodeExtras {
         else {
             Write-Log $LogMessages.messages.yarnInstalling -Level "info"
             try {
-                # Run npm in a child PowerShell so stderr noise from npm
-                # (e.g. "npm warn"/"npm error" lines) cannot trigger a
-                # terminating error in this script via $ErrorActionPreference=Stop
-                # or the PS 2>&1 redirection rules. We rely on $LASTEXITCODE.
-                $npmCmd = Get-Command npm.cmd -ErrorAction SilentlyContinue
-                if (-not $npmCmd) { $npmCmd = Get-Command npm -ErrorAction SilentlyContinue }
-                if (-not $npmCmd) {
-                    throw "npm executable not found in PATH after Node.js install"
+                # Use the shared helper -- handles npm stderr noise AND auto-falls back
+                # from a broken globalPrefix (e.g. errno -4094 / UNKNOWN: mkdir on E:\)
+                # to %APPDATA%\npm so the install can still succeed.
+                $npmResult = Invoke-NpmGlobalInstall -PackageSpec "yarn"
+                if (-not $npmResult.Success) {
+                    throw $npmResult.Error
                 }
-                $npmExe = $npmCmd.Source
-                $npmOutput = & cmd.exe /c "`"$npmExe`" install -g yarn 2>&1"
-                $npmExit = $LASTEXITCODE
-                if ($npmExit -ne 0) {
-                    $tail = if ($npmOutput) { ($npmOutput | Select-Object -Last 5) -join " | " } else { "(no output)" }
-                    throw "npm install -g yarn failed with exit code $npmExit. Last output: $tail"
+                if ($npmResult.Recovered) {
+                    Write-Log "Yarn was installed under fallback npm prefix '$($npmResult.PrefixUsed)'." -Level "warn"
                 }
+
                 $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+                # Make sure the (possibly new) prefix is on PATH so `yarn` resolves now.
+                if ($npmResult.PrefixUsed -and -not (Test-InPath -Directory $npmResult.PrefixUsed)) {
+                    Add-ToUserPath -Directory $npmResult.PrefixUsed
+                    $env:Path = "$env:Path;$($npmResult.PrefixUsed)"
+                }
                 $yarnVersion = & yarn --version 2>$null
                 $hasYarnVersion = -not [string]::IsNullOrWhiteSpace($yarnVersion)
                 if (-not $hasYarnVersion) {

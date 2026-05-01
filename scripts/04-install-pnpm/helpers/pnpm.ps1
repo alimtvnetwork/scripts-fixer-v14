@@ -8,6 +8,10 @@ $_loggingPath = Join-Path $_sharedDir "logging.ps1"
 if ((Test-Path $_loggingPath) -and -not (Get-Command Write-Log -ErrorAction SilentlyContinue)) {
     . $_loggingPath
 }
+$_npmUtilsPath = Join-Path $_sharedDir "npm-utils.ps1"
+if ((Test-Path $_npmUtilsPath) -and -not (Get-Command Invoke-NpmGlobalInstall -ErrorAction SilentlyContinue)) {
+    . $_npmUtilsPath
+}
 
 
 function Install-Pnpm {
@@ -43,13 +47,23 @@ function Install-Pnpm {
         # Upgrade to latest
         Write-Log $LogMessages.messages.pnpmUpgrading -Level "info"
         try {
-            & npm install -g pnpm@latest 2>$null
+            $r = Invoke-NpmGlobalInstall -PackageSpec "pnpm@latest"
+            if (-not $r.Success) { throw $r.Error }
+            if ($r.Recovered) {
+                Write-Log "pnpm upgraded under fallback npm prefix '$($r.PrefixUsed)'." -Level "warn"
+                if (-not (Test-InPath -Directory $r.PrefixUsed)) {
+                    Add-ToUserPath -Directory $r.PrefixUsed
+                    $env:Path = "$env:Path;$($r.PrefixUsed)"
+                }
+            }
             $newVersion = & pnpm --version 2>$null
             Write-Log ($LogMessages.messages.pnpmUpgradeSuccess -replace '\{version\}', $newVersion) -Level "success"
             Save-InstalledRecord -Name "pnpm" -Version $newVersion -Method "npm"
+            return $true
         } catch {
             Write-Log "pnpm upgrade failed: $_" -Level "error"
             Save-InstalledError -Name "pnpm" -ErrorMessage "$_" -Method "npm"
+            return $false
         }
     }
     else {
@@ -57,17 +71,31 @@ function Install-Pnpm {
         try {
             # Refresh PATH so the updated npm prefix from script 03 is visible
             $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
-            & npm install -g pnpm 2>$null
+            $r = Invoke-NpmGlobalInstall -PackageSpec "pnpm"
+            if (-not $r.Success) { throw $r.Error }
+            if ($r.Recovered) {
+                Write-Log "pnpm installed under fallback npm prefix '$($r.PrefixUsed)'." -Level "warn"
+            }
 
-            # Refresh PATH
+            # Refresh PATH and ensure the (possibly new) prefix is on it
             $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+            if ($r.PrefixUsed -and -not (Test-InPath -Directory $r.PrefixUsed)) {
+                Add-ToUserPath -Directory $r.PrefixUsed
+                $env:Path = "$env:Path;$($r.PrefixUsed)"
+            }
 
             $installedVersion = & pnpm --version 2>$null
+            $hasInstalledVersion = -not [string]::IsNullOrWhiteSpace($installedVersion)
+            if (-not $hasInstalledVersion) {
+                throw "npm install -g pnpm reported success (under prefix '$($r.PrefixUsed)') but 'pnpm --version' did not run. PATH may need a fresh shell."
+            }
             Write-Log ($LogMessages.messages.pnpmInstallSuccess -replace '\{version\}', $installedVersion) -Level "success"
             Save-InstalledRecord -Name "pnpm" -Version $installedVersion -Method "npm"
+            return $true
         } catch {
             Write-Log "pnpm install failed: $_" -Level "error"
             Save-InstalledError -Name "pnpm" -ErrorMessage "$_" -Method "npm"
+            return $false
         }
     }
 }
@@ -82,6 +110,18 @@ function Configure-PnpmStore {
     $storeConfig = $Config.store
     $isStorePathDisabled = -not $storeConfig.setStorePath
     if ($isStorePathDisabled) { return }
+
+    # Guard: if pnpm itself never installed (e.g. npm prefix mkdir errno -4094),
+    # skip configuration with a clear log instead of crashing on
+    # "'pnpm' is not recognized as the name of a cmdlet".
+    $pnpmCmd = Get-Command pnpm -ErrorAction SilentlyContinue
+    if (-not $pnpmCmd) {
+        Write-Log "Skipping pnpm store configuration: 'pnpm' is not on PATH (install step did not succeed). See earlier errors for the npm prefix / install failure." -Level "warn"
+        Write-FileError -FilePath "pnpm" -Operation "configure-pnpm-store" `
+            -Reason "Cannot configure pnpm store-dir because the pnpm command is not available. Most likely 'npm install -g pnpm' failed (often errno -4094 on a misconfigured global prefix)." `
+            -Module "Configure-PnpmStore"
+        return $null
+    }
 
     # Resolve store path
     $storePath = if ($DevDir) {
@@ -119,9 +159,14 @@ function Update-PnpmPath {
     $isPathUpdateDisabled = -not $Config.path.updateUserPath
     if ($isPathUpdateDisabled) { return }
 
+    # Guard: same protection as Configure-PnpmStore -- skip cleanly if pnpm
+    # is missing rather than throwing "not recognized".
+    $pnpmCmd = Get-Command pnpm -ErrorAction SilentlyContinue
+    $hasPnpm = [bool]$pnpmCmd
+
     # pnpm global bin directory
-    $pnpmHome = & pnpm config get global-bin-dir 2>$null
-    $hasPnpmHome = [bool]$pnpmHome
+    $pnpmHome = if ($hasPnpm) { & pnpm config get global-bin-dir 2>$null } else { $null }
+    $hasPnpmHome = -not [string]::IsNullOrWhiteSpace("$pnpmHome")
     $isPnpmHomeMissing = -not $hasPnpmHome
     if ($isPnpmHomeMissing) {
         # Fallback: use PNPM_HOME or default location
