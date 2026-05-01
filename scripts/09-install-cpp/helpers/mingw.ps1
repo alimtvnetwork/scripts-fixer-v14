@@ -21,6 +21,8 @@ function Resolve-MingwInstallDir {
         $LogMessages
     )
 
+    $isAutoYes = $env:SCRIPTS_AUTO_YES -eq "1"
+
     $hasDevDir = -not [string]::IsNullOrWhiteSpace($env:DEV_DIR)
     if ($hasDevDir) {
         $derived = Join-Path $env:DEV_DIR "mingw-w64"
@@ -50,7 +52,7 @@ function Resolve-MingwInstallDir {
     }
 
     $hasOrchestratorEnv = -not [string]::IsNullOrWhiteSpace($env:SCRIPTS_ROOT_RUN)
-    $isPromptMode = $InstallDirConfig.mode -ne "json-only" -and -not $hasOrchestratorEnv
+    $isPromptMode = $InstallDirConfig.mode -ne "json-only" -and -not $hasOrchestratorEnv -and -not $isAutoYes
 
     if ($isPromptMode) {
         $userInput = Read-Host -Prompt "Enter MinGW install directory (default: $default)"
