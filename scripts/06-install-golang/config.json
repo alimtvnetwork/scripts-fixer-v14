@@ -44,5 +44,12 @@
       "installPackage": "github.com/golangci/golangci-lint/cmd/golangci-lint@latest",
       "desc": "Fast Go linters aggregator"
     }
+  },
+  "chocoLibRepair": {
+    "enabled": false,
+    "_comment": "Optional repair when Chocolatey lib folder for golang exists but tools/ or tools/go/ subfolders are missing. Newer choco golang packages ship without tools/go (Go installs to C:\\Program Files\\Go) so this is purely cosmetic UNLESS go.exe is also missing on PATH. Modes: 'report-only' (log only), 'clean' (delete the empty/partial lib folder), 'reinstall' (uninstall then reinstall the choco package).",
+    "mode": "report-only",
+    "runWhenGoOnPath": false,
+    "runWhenGoMissing": true
   }
 }
