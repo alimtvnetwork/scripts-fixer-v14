@@ -270,23 +270,23 @@ function Install-NodeExtras {
         else {
             Write-Log $LogMessages.messages.yarnInstalling -Level "info"
             try {
-                # Run npm in a child PowerShell so stderr noise from npm
-                # (e.g. "npm warn"/"npm error" lines) cannot trigger a
-                # terminating error in this script via $ErrorActionPreference=Stop
-                # or the PS 2>&1 redirection rules. We rely on $LASTEXITCODE.
-                $npmCmd = Get-Command npm.cmd -ErrorAction SilentlyContinue
-                if (-not $npmCmd) { $npmCmd = Get-Command npm -ErrorAction SilentlyContinue }
-                if (-not $npmCmd) {
-                    throw "npm executable not found in PATH after Node.js install"
+                # Use the shared helper -- handles npm stderr noise AND auto-falls back
+                # from a broken globalPrefix (e.g. errno -4094 / UNKNOWN: mkdir on E:\)
+                # to %APPDATA%\npm so the install can still succeed.
+                $npmResult = Invoke-NpmGlobalInstall -PackageSpec "yarn"
+                if (-not $npmResult.Success) {
+                    throw $npmResult.Error
                 }
-                $npmExe = $npmCmd.Source
-                $npmOutput = & cmd.exe /c "`"$npmExe`" install -g yarn 2>&1"
-                $npmExit = $LASTEXITCODE
-                if ($npmExit -ne 0) {
-                    $tail = if ($npmOutput) { ($npmOutput | Select-Object -Last 5) -join " | " } else { "(no output)" }
-                    throw "npm install -g yarn failed with exit code $npmExit. Last output: $tail"
+                if ($npmResult.Recovered) {
+                    Write-Log "Yarn was installed under fallback npm prefix '$($npmResult.PrefixUsed)'." -Level "warn"
                 }
+
                 $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+                # Make sure the (possibly new) prefix is on PATH so `yarn` resolves now.
+                if ($npmResult.PrefixUsed -and -not (Test-InPath -Directory $npmResult.PrefixUsed)) {
+                    Add-ToUserPath -Directory $npmResult.PrefixUsed
+                    $env:Path = "$env:Path;$($npmResult.PrefixUsed)"
+                }
                 $yarnVersion = & yarn --version 2>$null
                 $hasYarnVersion = -not [string]::IsNullOrWhiteSpace($yarnVersion)
                 if (-not $hasYarnVersion) {
