@@ -862,7 +862,34 @@ function Resolve-Gopath {
         param([string]$CandidatePath)
 
         if ([string]::IsNullOrWhiteSpace($CandidatePath)) {
+            # No candidate at all -- prefer smart drive detection over a hard
+            # C:\ fallback so the user still gets E:/D: when available.
+            if (Get-Command Resolve-SmartDevDir -ErrorAction SilentlyContinue) {
+                return (Join-Path (Resolve-SmartDevDir) "go")
+            }
             return (Join-Path (Get-SafeDevDirFallback) "go")
+        }
+
+        # If the candidate's drive is unavailable on this machine, silently
+        # promote to smart drive detection. The configured `default` is a
+        # baseline, not an explicit user choice, so a missing E:/D: drive on
+        # a fresh box should not produce two `[ WARN ]` lines per run.
+        $isDriveQualifiedPath = $CandidatePath -match '^[A-Za-z]:\\'
+        if ($isDriveQualifiedPath) {
+            $driveName = $CandidatePath.Substring(0, 1)
+            $drive = Get-PSDrive -Name $driveName -ErrorAction SilentlyContinue
+            $isDriveReady = $false
+            if ($drive) {
+                try {
+                    $driveInfo = New-Object System.IO.DriveInfo("${driveName}:")
+                    $isDriveReady = $driveInfo.IsReady
+                } catch { $isDriveReady = $false }
+            }
+            if (-not $isDriveReady -and (Get-Command Resolve-SmartDevDir -ErrorAction SilentlyContinue)) {
+                $smart = Resolve-SmartDevDir
+                Write-Log ("Configured default drive '${driveName}:' not present -- using smart-detected dev dir: $smart") -Level "info"
+                return (Join-Path $smart "go")
+            }
         }
 
         if (Get-Command Resolve-UsableDevDir -ErrorAction SilentlyContinue) {
