@@ -81,7 +81,7 @@ if ($hasPathParam) {
 # -- Execute subcommand --------------------------------------------------------
 switch ($Command.ToLower()) {
     "all" {
-        Install-Pnpm -Config $config -LogMessages $logMessages
+        [void](Install-Pnpm -Config $config -LogMessages $logMessages)
         $storePath = Configure-PnpmStore -Config $config -LogMessages $logMessages -DevDir $devDir
         Update-PnpmPath -Config $config -LogMessages $logMessages
     }
