@@ -1122,11 +1122,16 @@ function Test-GoVetAvailability {
 
         try {
             New-Item -Path $tempVetDir -ItemType Directory -Force -Confirm:$false | Out-Null
-            Set-Content -LiteralPath $mainFilePath -Value "package main`n`nfunc main() {}`n" -Encoding UTF8
-            # Write go.mod directly -- avoids `go mod init` stderr noise tripping
-            # PowerShell's terminating-error pipeline.
+            # Write files via .NET with UTF8 *without BOM*. PowerShell 5's
+            # `Set-Content -Encoding UTF8` emits a BOM, which Go's modfile
+            # parser silently ignores -- making it look like there is no
+            # go.mod, after which `go vet ./...` auto-creates one and
+            # emits the misleading "go: creating new go.mod: module ..."
+            # line that previously surfaced as a probe failure.
+            $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+            [System.IO.File]::WriteAllText($mainFilePath, "package main`n`nfunc main() {}`n", $utf8NoBom)
             $goModContent = "module scripts-fixer-vet-check`n`ngo 1.21`n"
-            Set-Content -LiteralPath $goModPath -Value $goModContent -Encoding UTF8
+            [System.IO.File]::WriteAllText($goModPath, $goModContent, $utf8NoBom)
         } catch {
             $createError = $_
             Write-FileError -FilePath $mainFilePath -Operation "write" `
