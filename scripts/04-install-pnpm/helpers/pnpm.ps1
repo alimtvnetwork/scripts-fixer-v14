@@ -111,6 +111,18 @@ function Configure-PnpmStore {
     $isStorePathDisabled = -not $storeConfig.setStorePath
     if ($isStorePathDisabled) { return }
 
+    # Guard: if pnpm itself never installed (e.g. npm prefix mkdir errno -4094),
+    # skip configuration with a clear log instead of crashing on
+    # "'pnpm' is not recognized as the name of a cmdlet".
+    $pnpmCmd = Get-Command pnpm -ErrorAction SilentlyContinue
+    if (-not $pnpmCmd) {
+        Write-Log "Skipping pnpm store configuration: 'pnpm' is not on PATH (install step did not succeed). See earlier errors for the npm prefix / install failure." -Level "warn"
+        Write-FileError -FilePath "pnpm" -Operation "configure-pnpm-store" `
+            -Reason "Cannot configure pnpm store-dir because the pnpm command is not available. Most likely 'npm install -g pnpm' failed (often errno -4094 on a misconfigured global prefix)." `
+            -Module "Configure-PnpmStore"
+        return $null
+    }
+
     # Resolve store path
     $storePath = if ($DevDir) {
         Join-Path (Join-Path $DevDir $Config.devDirSubfolder) "store"
