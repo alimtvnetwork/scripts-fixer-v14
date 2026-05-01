@@ -522,7 +522,152 @@ function Get-ChocoGoLibPath {
     return $result
 }
 
-function Write-GoVerifyReport {
+function Invoke-ChocoGoLibRepair {
+    <#
+    .SYNOPSIS
+        Optional repair step for Chocolatey golang lib layouts where the
+        package folder exists (lib\golang\) but the expected tools\ or
+        tools\go\ subfolders are missing.
+
+        Newer chocolatey golang packages install Go directly to
+        "C:\Program Files\Go" and skip the tools\go layout, so this is
+        cosmetic when go.exe is on PATH. When go.exe is MISSING, the
+        partial lib folder usually indicates a broken/aborted install
+        and reinstalling is the right fix.
+
+    .OUTPUTS
+        Hashtable: Ran (bool), Action (string), Success (bool), Reason (string).
+    #>
+    param(
+        [Parameter(Mandatory)] [string]$PackageName,
+        [Parameter(Mandatory)]            $ChocoLib,
+        [Parameter(Mandatory)] [PSCustomObject]$Config,
+                                          $LogMessages,
+        [bool]$IsGoOnPath
+    )
+
+    $msgs = $LogMessages.messages
+    $result = @{ Ran = $false; Action = "skipped"; Success = $true; Reason = $null }
+
+    $repairCfg = $Config.chocoLibRepair
+    $hasRepairCfg = $null -ne $repairCfg
+    if (-not $hasRepairCfg -or -not [bool]$repairCfg.enabled) {
+        Write-Log $msgs.chocoLibRepairDisabled -Level "info"
+        $result.Reason = "chocoLibRepair.enabled=false"
+        return $result
+    }
+
+    # Nothing to repair if the lib folder itself doesn't exist
+    if (-not $ChocoLib.Found) {
+        Write-Log (($msgs.chocoLibRepairSkipNoLib `
+            -replace '\{pkg\}',     $PackageName) `
+            -replace '\{libpath\}', "$($ChocoLib.ProbeRoot)") -Level "info"
+        $result.Reason = "lib-folder-absent"
+        return $result
+    }
+
+    # Nothing to repair if tools\go is already there
+    if ([bool]$ChocoLib.ToolsGoExists) {
+        Write-Log (($msgs.chocoLibRepairSkipHealthy `
+            -replace '\{pkg\}',       $PackageName) `
+            -replace '\{toolspath\}', "$($ChocoLib.ToolsGoPath)") -Level "info"
+        $result.Reason = "layout-healthy"
+        return $result
+    }
+
+    # Gating on go.exe state
+    $runWhenOnPath  = if ($null -ne $repairCfg.runWhenGoOnPath)  { [bool]$repairCfg.runWhenGoOnPath }  else { $false }
+    $runWhenMissing = if ($null -ne $repairCfg.runWhenGoMissing) { [bool]$repairCfg.runWhenGoMissing } else { $true  }
+
+    if ($IsGoOnPath -and -not $runWhenOnPath) {
+        Write-Log $msgs.chocoLibRepairSkipGoOnPath -Level "info"
+        $result.Reason = "go-on-path-cosmetic"
+        return $result
+    }
+    if (-not $IsGoOnPath -and -not $runWhenMissing) {
+        Write-Log $msgs.chocoLibRepairSkipGoMissing -Level "warn"
+        $result.Reason = "go-missing-but-disabled"
+        return $result
+    }
+
+    $mode = "$($repairCfg.mode)".Trim().ToLowerInvariant()
+    if ([string]::IsNullOrWhiteSpace($mode)) { $mode = "report-only" }
+
+    $toolsRoot     = Split-Path -Parent $ChocoLib.ToolsGoPath
+    $isToolsExists = Test-Path -LiteralPath $toolsRoot
+
+    Write-Log ((((($msgs.chocoLibRepairStart `
+        -replace '\{pkg\}',           $PackageName) `
+        -replace '\{mode\}',          $mode) `
+        -replace '\{libpath\}',       "$($ChocoLib.LibPath)") `
+        -replace '\{toolsgoexists\}', "$([bool]$ChocoLib.ToolsGoExists)")) -Level "info"
+
+    $result.Ran = $true
+    $result.Action = $mode
+
+    switch ($mode) {
+        "report-only" {
+            Write-Log ((($msgs.chocoLibRepairReportOnly `
+                -replace '\{toolsexists\}',   "$isToolsExists") `
+                -replace '\{toolsgoexists\}', "$([bool]$ChocoLib.ToolsGoExists)")) -Level "info"
+            $result.Reason = "report-only mode"
+        }
+        "clean" {
+            Write-Log ($msgs.chocoLibRepairCleanStart -replace '\{libpath\}', "$($ChocoLib.LibPath)") -Level "warn"
+            try {
+                Remove-Item -LiteralPath $ChocoLib.LibPath -Recurse -Force -ErrorAction Stop
+                Write-Log ($msgs.chocoLibRepairCleanOk -replace '\{libpath\}', "$($ChocoLib.LibPath)") -Level "success"
+                $result.Reason = "clean-ok"
+            } catch {
+                $err = "$_"
+                Write-Log (($msgs.chocoLibRepairCleanFail `
+                    -replace '\{libpath\}', "$($ChocoLib.LibPath)") `
+                    -replace '\{error\}',   $err) -Level "error"
+                Write-FileError -FilePath $ChocoLib.LibPath -Operation "remove-choco-lib" -Reason $err -Module "Invoke-ChocoGoLibRepair"
+                $result.Success = $false
+                $result.Reason = "clean-failed: $err"
+            }
+        }
+        "reinstall" {
+            Write-Log ($msgs.chocoLibRepairReinstallStart -replace '\{pkg\}', $PackageName) -Level "warn"
+            try {
+                $uninstallOk = Uninstall-ChocoPackage -PackageName $PackageName
+                if (-not $uninstallOk) {
+                    Write-Log ($msgs.chocoLibRepairUninstallFail -replace '\{pkg\}', $PackageName) -Level "warn"
+                }
+            } catch {
+                Write-Log ("Uninstall threw: $_") -Level "warn"
+            }
+            try {
+                $installOk = Install-ChocoPackage -PackageName $PackageName
+                if ($installOk) {
+                    Write-Log ($msgs.chocoLibRepairReinstallOk -replace '\{pkg\}', $PackageName) -Level "success"
+                    $result.Reason = "reinstall-ok"
+                } else {
+                    Write-Log ($msgs.chocoLibRepairReinstallFail -replace '\{pkg\}', $PackageName) -Level "error"
+                    $result.Success = $false
+                    $result.Reason = "reinstall-failed"
+                }
+            } catch {
+                $err = "$_"
+                Write-Log ($msgs.chocoLibRepairReinstallFail -replace '\{pkg\}', $PackageName) -Level "error"
+                Write-FileError -FilePath $PackageName -Operation "choco-reinstall" -Reason $err -Module "Invoke-ChocoGoLibRepair"
+                $result.Success = $false
+                $result.Reason = "reinstall-exception: $err"
+            }
+        }
+        default {
+            Write-Log ($msgs.chocoLibRepairUnknownMode -replace '\{mode\}', $mode) -Level "warn"
+            $result.Action = "skipped"
+            $result.Ran = $false
+            $result.Reason = "unknown-mode: $mode"
+        }
+    }
+
+    return $result
+}
+
+
     <#
     .SYNOPSIS
         Persists the structured Assert-GoOnPath report to logs/go-verify-report.json
