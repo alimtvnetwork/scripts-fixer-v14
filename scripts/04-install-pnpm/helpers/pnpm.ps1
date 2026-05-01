@@ -159,9 +159,14 @@ function Update-PnpmPath {
     $isPathUpdateDisabled = -not $Config.path.updateUserPath
     if ($isPathUpdateDisabled) { return }
 
+    # Guard: same protection as Configure-PnpmStore -- skip cleanly if pnpm
+    # is missing rather than throwing "not recognized".
+    $pnpmCmd = Get-Command pnpm -ErrorAction SilentlyContinue
+    $hasPnpm = [bool]$pnpmCmd
+
     # pnpm global bin directory
-    $pnpmHome = & pnpm config get global-bin-dir 2>$null
-    $hasPnpmHome = [bool]$pnpmHome
+    $pnpmHome = if ($hasPnpm) { & pnpm config get global-bin-dir 2>$null } else { $null }
+    $hasPnpmHome = -not [string]::IsNullOrWhiteSpace("$pnpmHome")
     $isPnpmHomeMissing = -not $hasPnpmHome
     if ($isPnpmHomeMissing) {
         # Fallback: use PNPM_HOME or default location
