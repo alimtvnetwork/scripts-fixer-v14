@@ -764,7 +764,11 @@ function Initialize-Gopath {
         $LogMessages
     )
 
-    $gopathFull = [System.IO.Path]::GetFullPath($GopathValue)
+    $gopathCandidate = $GopathValue
+    if (Get-Command Resolve-UsableDevDir -ErrorAction SilentlyContinue) {
+        $gopathCandidate = Resolve-UsableDevDir -PathValue $GopathValue
+    }
+    $gopathFull = [System.IO.Path]::GetFullPath($gopathCandidate)
     Write-Log ($LogMessages.messages.gopathResolved -replace '\{path\}', $gopathFull) -Level "info"
 
     $isDirMissing = -not (Test-Path $gopathFull)
