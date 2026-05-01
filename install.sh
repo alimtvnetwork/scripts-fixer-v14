@@ -13,10 +13,15 @@
 set -e
 
 OWNER="alimtvnetwork"
-BASE="scripts-fixer"
-CURRENT=14  # <-- bump this when this file is copied into a new -vN repo
+REPO_SLUG="scripts-fixer-v14"  # single source of truth for this repo generation
+if [[ ! "$REPO_SLUG" =~ ^(.+)-v([0-9]+)$ ]]; then
+    echo "  [ERROR] Invalid repo slug in installer: $REPO_SLUG"
+    exit 1
+fi
+BASE="${BASH_REMATCH[1]}"
+CURRENT="${BASH_REMATCH[2]}"
 FALLBACK="$HOME/scripts-fixer"
-REPO="https://github.com/$OWNER/$BASE-v$CURRENT.git"
+REPO="https://github.com/$OWNER/$REPO_SLUG.git"
 
 PROBE_MAX="${SCRIPTS_FIXER_PROBE_MAX:-30}"
 if ! [[ "$PROBE_MAX" =~ ^[0-9]+$ ]] || [ "$PROBE_MAX" -lt 1 ] || [ "$PROBE_MAX" -gt 100 ]; then

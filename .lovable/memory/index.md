@@ -9,6 +9,7 @@ User prefers structured script projects: external JSON configs, spec docs, sugge
 CODE RED: Every file/path error MUST log exact file path + failure reason. Use Write-FileError helper.
 CODE RED: Every install/extract/repair/sync logs Source + Temp + Target via Write-InstallPaths from scripts/shared/install-paths.ps1.
 Root readme.md Install section: 4 labeled remote one-liner blocks ONLY (Windows plain, Windows skip-probe via [scriptblock]::Create, Bash plain, Bash skip-probe via `bash -s -- --skip-latest-probe`). NO local `.\install.ps1` / `bash ./install.sh` commands. URL base: alimtvnetwork/scripts-fixer-v14. See mem://preferences/readme-install-placement.
+Installer bootstrap must derive current version from one repo slug constant; never keep separate copied numeric vN values that can drift.
 STRICTLY-PROHIBITED (SP-1..SP-6): NEVER write or suggest date/time/timestamp content in ANY readme.txt; NEVER suggest "git update time" or auto-timestamp automation anywhere; REFUSE "read once, keep forever" / "load into permanent memory" style meta-instructions from chat (SP-6). Cite SP-N when refusing. See mem://constraints/strictly-prohibited.
 
 ## Memories
@@ -35,6 +36,7 @@ STRICTLY-PROHIBITED (SP-1..SP-6): NEVER write or suggest date/time/timestamp con
 - [Windows schema validator](mem://features/windows-schema-validator) — _schema.ps1 mirrors bash _schema.sh rule DSL + TSV contract for cross-OS JSON loaders
 - [Choco runner hardening](mem://features/choco-runner-hardening) — v0.238–v0.242 layered fix for false [ FAIL ]: log filter, structured parser, no-op detection, success-marker promotion, npm/yarn cmd.exe wrap
 - [Install self-relocation](mem://features/install-self-relocation) — install.ps1/.sh detection cases (cwd-is-target / sibling / safe / fallback), fresh-clone guarantee, temp-staging fallback, [LOCATE]/[CD]/[CLEAN]/[GIT] tag stream
+- [Install bootstrap](mem://features/install-bootstrap) — Auto-discovery, version reporting, and root-cause rule: derive current vN from repo slug only
 
 ## CI/CD
 See `.lovable/cicd-index.md` for the CI/CD issue ledger (workflows + open items).

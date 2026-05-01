@@ -16,8 +16,14 @@
     # ----- Configuration ----------------------------------------------------
     $owner    = "alimtvnetwork"
     $baseName = "scripts-fixer"
-    $current  = 14  # <-- bump this when this file is copied into a new -vN repo
-    $repo     = "https://github.com/$owner/$baseName-v$current.git"
+    $repoSlug = "scripts-fixer-v14"  # single source of truth for this repo generation
+    if ($repoSlug -notmatch '^(.+)-v([0-9]+)$') {
+        Write-Host "  [ERROR] Invalid repo slug in installer: $repoSlug" -ForegroundColor Red
+        return
+    }
+    $baseName = $Matches[1]
+    $current  = [int]$Matches[2]
+    $repo     = "https://github.com/$owner/$repoSlug.git"
     # NOTE: $folder is resolved later -- it is CWD-aware (see Resolve-TargetFolder).
     # Fallback only kicks in when CWD is a protected/system directory.
     $fallbackFolder = Join-Path $env:USERPROFILE "scripts-fixer"
