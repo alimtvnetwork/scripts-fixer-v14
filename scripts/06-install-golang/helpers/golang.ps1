@@ -687,6 +687,8 @@ function Resolve-Gopath {
         $LogMessages
     )
 
+    $isAutoYes = $env:SCRIPTS_AUTO_YES -eq "1"
+
     $hasDevDir = -not [string]::IsNullOrWhiteSpace($env:DEV_DIR)
     if ($hasDevDir -and $DevDirSubfolder) {
         $derived = Join-Path $env:DEV_DIR $DevDirSubfolder
@@ -720,6 +722,11 @@ function Resolve-Gopath {
         $envGopath = Join-Path $env:DEV_DIR "go"
         Write-Log ($LogMessages.messages.gopathDefault -replace '\{path\}', $envGopath) -Level "info"
         return $envGopath
+    }
+
+    if ($isAutoYes) {
+        Write-Log ($LogMessages.messages.gopathDefault -replace '\{path\}', $default) -Level "info"
+        return $default
     }
 
     $userInput = Read-Host -Prompt "Enter GOPATH (default: $default)"
@@ -824,6 +831,8 @@ function Configure-GoEnv {
         $LogMessages
     )
 
+    $isAutoYes = $env:SCRIPTS_AUTO_YES -eq "1"
+
     $hasNoConfig = -not $GoEnvConfig -or -not $GoEnvConfig.settings
     if ($hasNoConfig) {
         Write-Log $LogMessages.messages.goEnvNoConfig -Level "info"
@@ -866,7 +875,7 @@ function Configure-GoEnv {
         }
 
         $hasOrchestratorEnv = -not [string]::IsNullOrWhiteSpace($env:SCRIPTS_ROOT_RUN)
-        $shouldPrompt = $GoEnvConfig.applyMode -eq "json-or-prompt" -and $entry.promptOnFirstRun -and -not $hasOrchestratorEnv
+        $shouldPrompt = $GoEnvConfig.applyMode -eq "json-or-prompt" -and $entry.promptOnFirstRun -and -not $hasOrchestratorEnv -and -not $isAutoYes
         if ($shouldPrompt) {
             $userInput = Read-Host -Prompt "Enter value for $key (default: $finalValue)"
             $hasUserInput = -not [string]::IsNullOrWhiteSpace($userInput)
