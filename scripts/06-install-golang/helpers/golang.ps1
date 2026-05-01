@@ -667,7 +667,7 @@ function Invoke-ChocoGoLibRepair {
     return $result
 }
 
-
+function Write-GoVerifyReport {
     <#
     .SYNOPSIS
         Persists the structured Assert-GoOnPath report to logs/go-verify-report.json
