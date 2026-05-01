@@ -1082,6 +1082,22 @@ function Configure-GoEnv {
 }
 
 function Test-GoVetAvailability {
+    <#
+    .SYNOPSIS
+        Verifies `go vet` works by creating a tiny throw-away module in TEMP
+        and running `go vet ./...` against it.
+
+        IMPORTANT: We do NOT call `go mod init` here. `go mod init` writes a
+        normal informational line to STDERR ("go: creating new go.mod: module
+        scripts-fixer-vet-check"), and under $ErrorActionPreference = Stop
+        the PowerShell `2>&1` redirection turns that line into a TERMINATING
+        error -- which then bubbles up as a misleading
+        "go vet check failed: go: creating new go.mod: module ...".
+
+        Instead we write the go.mod file directly (which is exactly what
+        `go mod init` does) and isolate stderr from `go vet` via Start-Process
+        with redirected files, so harmless stderr text cannot crash the probe.
+    #>
     param(
         $LogMessages
     )
@@ -1089,62 +1105,84 @@ function Test-GoVetAvailability {
     $msgs = $LogMessages.messages
     $tempVetDir = Join-Path ([System.IO.Path]::GetTempPath()) ("scripts-fixer-go-vet-" + [guid]::NewGuid().ToString("N"))
     $mainFilePath = Join-Path $tempVetDir "main.go"
-    $isLocationPushed = $false
+    $goModPath    = Join-Path $tempVetDir "go.mod"
 
     try {
         Write-Log ($msgs.goVetTempModule -replace '\{path\}', $tempVetDir) -Level "info"
 
         try {
             New-Item -Path $tempVetDir -ItemType Directory -Force -Confirm:$false | Out-Null
-            Set-Content -Path $mainFilePath -Value "package main`n`nfunc main() {}`n" -Encoding UTF8
+            Set-Content -LiteralPath $mainFilePath -Value "package main`n`nfunc main() {}`n" -Encoding UTF8
+            # Write go.mod directly -- avoids `go mod init` stderr noise tripping
+            # PowerShell's terminating-error pipeline.
+            $goModContent = "module scripts-fixer-vet-check`n`ngo 1.21`n"
+            Set-Content -LiteralPath $goModPath -Value $goModContent -Encoding UTF8
         } catch {
             $createError = $_
-            Write-FileError -FilePath $mainFilePath -Operation "write" -Reason "Failed to create temporary go vet module: $createError" -Module "Test-GoVetAvailability"
+            Write-FileError -FilePath $mainFilePath -Operation "write" `
+                -Reason "Failed to create temporary go vet module: $createError" `
+                -Module "Test-GoVetAvailability"
             return $false
         }
 
-        Push-Location $tempVetDir
-        $isLocationPushed = $true
-
-        $modOutput = & go.exe mod init scripts-fixer-vet-check 2>&1
-        $modExitCode = $LASTEXITCODE
-        foreach ($line in $modOutput) {
-            if ($line -and $line.ToString().Trim().Length -gt 0) { Write-Log $line -Level "info" }
-        }
-
-        $hasModInitFailed = $modExitCode -ne 0
-        if ($hasModInitFailed) {
-            Write-Log ($msgs.goVetFailed -replace '\{error\}', "go mod init failed in $tempVetDir (exit code $modExitCode)") -Level "warn"
+        # Resolve go.exe -- skip cleanly if it's missing (caller already logs).
+        $goCmd = Get-Command go.exe -ErrorAction SilentlyContinue
+        if (-not $goCmd) {
+            Write-Log ($msgs.goVetFailed -replace '\{error\}', "go.exe not found on PATH") -Level "warn"
             return $false
         }
+        $goExe = $goCmd.Source
 
-        $vetOutput = & go.exe vet ./... 2>&1
-        $vetExitCode = $LASTEXITCODE
-        foreach ($line in $vetOutput) {
-            if ($line -and $line.ToString().Trim().Length -gt 0) { Write-Log $line -Level "info" }
+        # Run `go vet ./...` via Start-Process so stderr lines (download
+        # progress, harmless info) cannot become PowerShell terminating errors.
+        $stdoutFile = Join-Path ([System.IO.Path]::GetTempPath()) ("vet-out-" + [guid]::NewGuid().ToString("N") + ".log")
+        $stderrFile = Join-Path ([System.IO.Path]::GetTempPath()) ("vet-err-" + [guid]::NewGuid().ToString("N") + ".log")
+
+        try {
+            $proc = Start-Process -FilePath $goExe `
+                -ArgumentList @("vet","./...") `
+                -WorkingDirectory $tempVetDir `
+                -NoNewWindow -Wait -PassThru `
+                -RedirectStandardOutput $stdoutFile `
+                -RedirectStandardError  $stderrFile
+
+            $vetExitCode = $proc.ExitCode
+
+            $outLines = if (Test-Path -LiteralPath $stdoutFile) { Get-Content -LiteralPath $stdoutFile -ErrorAction SilentlyContinue } else { @() }
+            $errLines = if (Test-Path -LiteralPath $stderrFile) { Get-Content -LiteralPath $stderrFile -ErrorAction SilentlyContinue } else { @() }
+            foreach ($line in @($outLines + $errLines)) {
+                if ($line -and "$line".Trim().Length -gt 0) { Write-Log "$line" -Level "info" }
+            }
+
+            $hasVetFailed = $vetExitCode -ne 0
+            if ($hasVetFailed) {
+                $tail = if ($errLines -and $errLines.Count -gt 0) { ($errLines | Select-Object -Last 3) -join " | " } else { "(no stderr; exit $vetExitCode)" }
+                Write-Log ($msgs.goVetFailed -replace '\{error\}', "go vet ./... failed in $tempVetDir (exit $vetExitCode): $tail") -Level "warn"
+                return $false
+            }
+
+            Write-Log $msgs.goVetAvailable -Level "success"
+            return $true
+        } finally {
+            foreach ($f in @($stdoutFile, $stderrFile)) {
+                if (Test-Path -LiteralPath $f) {
+                    try { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue } catch { }
+                }
+            }
         }
-
-        $hasVetFailed = $vetExitCode -ne 0
-        if ($hasVetFailed) {
-            Write-Log ($msgs.goVetFailed -replace '\{error\}', "go vet ./... failed in $tempVetDir (exit code $vetExitCode)") -Level "warn"
-            return $false
-        }
-
-        Write-Log $msgs.goVetAvailable -Level "success"
-        return $true
     } catch {
         Write-Log ($msgs.goVetFailed -replace '\{error\}', $_) -Level "warn"
         return $false
     } finally {
-        if ($isLocationPushed) { Pop-Location }
-
-        if (Test-Path $tempVetDir) {
+        if (Test-Path -LiteralPath $tempVetDir) {
             try {
-                Remove-Item -Path $tempVetDir -Recurse -Force -Confirm:$false
+                Remove-Item -LiteralPath $tempVetDir -Recurse -Force -Confirm:$false
             } catch {
                 $cleanupError = $_
                 try {
-                    Write-FileError -FilePath $tempVetDir -Operation "write" -Reason "Failed to remove temporary go vet module: $cleanupError" -Module "Test-GoVetAvailability"
+                    Write-FileError -FilePath $tempVetDir -Operation "write" `
+                        -Reason "Failed to remove temporary go vet module: $cleanupError" `
+                        -Module "Test-GoVetAvailability"
                 } catch {
                     Write-Log ("[CODE RED] File error during write: {0} -- Reason: Failed to remove temporary go vet module: {1} [Module: Test-GoVetAvailability]" -f $tempVetDir, $cleanupError) -Level "warn"
                 }
