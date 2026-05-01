@@ -131,6 +131,37 @@ function Show-VersionHeader {
     }
 }
 
+function Show-VersionFooter {
+    $ver = Get-ScriptVersion
+    if ([string]::IsNullOrWhiteSpace($ver)) { $ver = "unknown" }
+
+    $sha    = "unknown"
+    $branch = "unknown"
+    $remote = $null
+    try {
+        Push-Location $RootDir
+        $hasGit = Get-Command git -ErrorAction SilentlyContinue
+        if ($hasGit) {
+            $s = (& git rev-parse --short=12 HEAD 2>$null) | Select-Object -First 1
+            if ($s) { $sha = "$s".Trim() }
+            $b = (& git rev-parse --abbrev-ref HEAD 2>$null) | Select-Object -First 1
+            if ($b) { $branch = "$b".Trim() }
+            $r = (& git config --get remote.origin.url 2>$null) | Select-Object -First 1
+            if ($r) { $remote = "$r".Trim() }
+        }
+    } catch {} finally { Pop-Location -ErrorAction SilentlyContinue }
+
+    Write-Host ""
+    Write-Host "  scripts-fixer v$ver" -ForegroundColor Magenta -NoNewline
+    Write-Host " | " -ForegroundColor DarkGray -NoNewline
+    Write-Host "git $sha ($branch)" -ForegroundColor Cyan
+    if ($remote) {
+        Write-Host "  repo: " -ForegroundColor DarkGray -NoNewline
+        Write-Host "$remote" -ForegroundColor White
+    }
+    Write-Host ""
+}
+
 # ── Detect installed tool version (quick, no install) ────────────────
 function Get-InstalledTag {
     param([string]$ToolCmd, [string]$Flag = "--version", [scriptblock]$Parse)
@@ -2960,6 +2991,7 @@ if ($hasInstallKeywords) {
     }
 
     Remove-Item Env:\SCRIPTS_ROOT_RUN -ErrorAction SilentlyContinue
+    Show-VersionFooter
     exit 0
 }
 
@@ -3018,7 +3050,11 @@ if ($Defaults -and -not $Y) {
 $result = Invoke-ScriptById -ScriptId $I -ExtraArgs $scriptArgs
 
 $isScriptFailed = -not $result
-if ($isScriptFailed) { exit 1 }
+if ($isScriptFailed) {
+    Show-VersionFooter
+    exit 1
+}
 
 # ── Clean up env flag ────────────────────────────────────────────────
 Remove-Item Env:\SCRIPTS_ROOT_RUN -ErrorAction SilentlyContinue
+Show-VersionFooter
