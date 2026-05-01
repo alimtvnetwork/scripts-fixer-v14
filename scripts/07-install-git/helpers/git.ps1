@@ -198,6 +198,7 @@ function Configure-GitGlobal {
     )
 
     $gc = $Config.gitConfig
+    $isAutoYes = $env:SCRIPTS_AUTO_YES -eq "1"
     Write-Log $LogMessages.messages.configuringGit -Level "info"
 
     # -- user.name ---------------------------------------------------------------
@@ -215,7 +216,7 @@ function Configure-GitGlobal {
             $name = $env:GIT_USER_NAME
         }
         $hasOrchestratorEnv = -not [string]::IsNullOrWhiteSpace($env:SCRIPTS_ROOT_RUN)
-        if ($hasNoName -and -not $hasGitNameEnv -and $nameConfig.promptOnFirstRun -and -not $hasOrchestratorEnv) {
+        if ($hasNoName -and -not $hasGitNameEnv -and $nameConfig.promptOnFirstRun -and -not $hasOrchestratorEnv -and -not $isAutoYes) {
             $name = Read-Host $LogMessages.messages.promptUserName
         }
         if ($name) {
@@ -239,7 +240,7 @@ function Configure-GitGlobal {
             $email = $env:GIT_USER_EMAIL
         }
         $hasOrchestratorEnv = -not [string]::IsNullOrWhiteSpace($env:SCRIPTS_ROOT_RUN)
-        if ($hasNoEmail -and -not $hasGitEmailEnv -and $emailConfig.promptOnFirstRun -and -not $hasOrchestratorEnv) {
+        if ($hasNoEmail -and -not $hasGitEmailEnv -and $emailConfig.promptOnFirstRun -and -not $hasOrchestratorEnv -and -not $isAutoYes) {
             $email = Read-Host $LogMessages.messages.promptUserEmail
         }
         if ($email) {
