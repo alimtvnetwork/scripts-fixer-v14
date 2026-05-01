@@ -1028,17 +1028,23 @@ function Install-GoTools {
         $installPkg = $ToolsConfig.golangciLint.installPackage
         Write-Log ($msgs.golangciLintInstalling -replace '\{package\}', $installPkg) -Level "info"
 
-        # Run `go install` and capture the FULL output so the real error tail is
-        # visible -- not just the in-progress "go: downloading ..." line. We rely
-        # on $LASTEXITCODE rather than try/catch because go.exe writes progress
-        # to stderr without throwing a terminating PowerShell error.
+        # Run `go install` through Start-Process with redirected files. Direct
+        # invocation (`& go.exe ... 2>&1`) turns native stderr into ErrorRecord
+        # objects under `$ErrorActionPreference = Stop`, so harmless progress like
+        # "go: downloading ..." can become an unhandled exception before we can
+        # inspect the real exit code.
         function Invoke-GoInstallOnce {
             param([string]$Pkg, [string]$ProxyOverride)
             $prevProxy = $env:GOPROXY
+            $stdoutPath = Join-Path ([System.IO.Path]::GetTempPath()) ("scripts-fixer-go-install-out-" + [guid]::NewGuid().ToString("N") + ".log")
+            $stderrPath = Join-Path ([System.IO.Path]::GetTempPath()) ("scripts-fixer-go-install-err-" + [guid]::NewGuid().ToString("N") + ".log")
             if ($ProxyOverride) { $env:GOPROXY = $ProxyOverride }
             try {
+                $process = Start-Process -FilePath "go.exe" -ArgumentList @("install", $Pkg) -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
                 $allLines = @()
-                & go.exe install $Pkg 2>&1 | ForEach-Object {
+                $stdoutLines = if (Test-Path $stdoutPath) { Get-Content -Path $stdoutPath -ErrorAction SilentlyContinue } else { @() }
+                $stderrLines = if (Test-Path $stderrPath) { Get-Content -Path $stderrPath -ErrorAction SilentlyContinue } else { @() }
+                foreach ($line in @($stdoutLines + $stderrLines)) {
                     $line = "$_"
                     if ($line.Trim().Length -gt 0) {
                         Write-Log $line -Level "info"
@@ -1046,12 +1052,21 @@ function Install-GoTools {
                     }
                 }
                 return [pscustomobject]@{
-                    ExitCode = $LASTEXITCODE
+                    ExitCode = $process.ExitCode
                     Output   = ($allLines -join "`n")
                     LastErr  = ($allLines | Where-Object { $_ -notmatch '^\s*go:\s+downloading\s+' } | Select-Object -Last 1)
                 }
             } finally {
                 $env:GOPROXY = $prevProxy
+                foreach ($tempPath in @($stdoutPath, $stderrPath)) {
+                    if (Test-Path $tempPath) {
+                        try {
+                            Remove-Item -Path $tempPath -Force -Confirm:$false
+                        } catch {
+                            Write-Log ("[CODE RED] File error during write: {0} -- Reason: Failed to remove temporary go install log: {1} [Module: Install-GoTools]" -f $tempPath, $_) -Level "warn"
+                        }
+                    }
+                }
             }
         }
 
