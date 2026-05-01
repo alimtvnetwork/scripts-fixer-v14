@@ -76,6 +76,18 @@ function Test-DriveQualified {
         return $false
     }
 
+    try {
+        $driveInfo = New-Object System.IO.DriveInfo("${DriveLetter}:")
+        $isDriveReady = $driveInfo.IsReady
+        if (-not $isDriveReady) {
+            Write-Log ($slm.messages.driveNotReady -replace '\{drive\}', "${DriveLetter}:") -Level "warn"
+            return $false
+        }
+    } catch {
+        Write-Log ($slm.messages.driveNotReady -replace '\{drive\}', "${DriveLetter}:") -Level "warn"
+        return $false
+    }
+
     # Get free space via WMI (more reliable than PSDrive.Free for fixed disks)
     $freeGB = 0
     try {
@@ -247,6 +259,22 @@ function Resolve-UsableDevDir {
         $isDriveMissing = -not $hasDrive
         if ($isDriveMissing) {
             Write-Log ($slm.messages.devDirDriveMissing -replace '\{path\}', $fullPath) -Level "warn"
+            $fallbackPath = Get-SafeDevDirFallback
+            Write-Log ($slm.messages.devDirFallback -replace '\{path\}', $fallbackPath) -Level "warn"
+            return $fallbackPath
+        }
+
+        try {
+            $driveInfo = New-Object System.IO.DriveInfo("${driveName}:")
+            $isDriveReady = $driveInfo.IsReady
+            if (-not $isDriveReady) {
+                Write-Log ($slm.messages.devDirDriveNotReady -replace '\{path\}', $fullPath) -Level "warn"
+                $fallbackPath = Get-SafeDevDirFallback
+                Write-Log ($slm.messages.devDirFallback -replace '\{path\}', $fallbackPath) -Level "warn"
+                return $fallbackPath
+            }
+        } catch {
+            Write-Log ($slm.messages.devDirDriveNotReady -replace '\{path\}', $fullPath) -Level "warn"
             $fallbackPath = Get-SafeDevDirFallback
             Write-Log ($slm.messages.devDirFallback -replace '\{path\}', $fallbackPath) -Level "warn"
             return $fallbackPath
