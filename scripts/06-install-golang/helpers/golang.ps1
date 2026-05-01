@@ -820,6 +820,14 @@ function Install-Go {
         # Same audit log on the upgrade/already-present path.
         $chocoLib = Get-ChocoGoLibPath -PackageName $packageName -LogMessages $LogMessages
 
+        # Optional repair: when lib folder exists but tools/go is missing.
+        $repair = Invoke-ChocoGoLibRepair -PackageName $packageName -ChocoLib $chocoLib `
+            -Config $Config -LogMessages $LogMessages -IsGoOnPath ([bool]$verify.Success)
+        if ($repair.Ran -and $repair.Success -and ($repair.Action -in @('clean','reinstall'))) {
+            $verify   = Assert-GoOnPath -LogMessages $LogMessages
+            $chocoLib = Get-ChocoGoLibPath -PackageName $packageName -LogMessages $LogMessages
+        }
+
         # Persist a structured JSON report of every attempt + final state.
         [void](Write-GoVerifyReport -Verify $verify -ChocoLib $chocoLib -PackageName $packageName)
 
