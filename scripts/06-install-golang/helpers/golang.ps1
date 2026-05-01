@@ -862,7 +862,34 @@ function Resolve-Gopath {
         param([string]$CandidatePath)
 
         if ([string]::IsNullOrWhiteSpace($CandidatePath)) {
+            # No candidate at all -- prefer smart drive detection over a hard
+            # C:\ fallback so the user still gets E:/D: when available.
+            if (Get-Command Resolve-SmartDevDir -ErrorAction SilentlyContinue) {
+                return (Join-Path (Resolve-SmartDevDir) "go")
+            }
             return (Join-Path (Get-SafeDevDirFallback) "go")
+        }
+
+        # If the candidate's drive is unavailable on this machine, silently
+        # promote to smart drive detection. The configured `default` is a
+        # baseline, not an explicit user choice, so a missing E:/D: drive on
+        # a fresh box should not produce two `[ WARN ]` lines per run.
+        $isDriveQualifiedPath = $CandidatePath -match '^[A-Za-z]:\\'
+        if ($isDriveQualifiedPath) {
+            $driveName = $CandidatePath.Substring(0, 1)
+            $drive = Get-PSDrive -Name $driveName -ErrorAction SilentlyContinue
+            $isDriveReady = $false
+            if ($drive) {
+                try {
+                    $driveInfo = New-Object System.IO.DriveInfo("${driveName}:")
+                    $isDriveReady = $driveInfo.IsReady
+                } catch { $isDriveReady = $false }
+            }
+            if (-not $isDriveReady -and (Get-Command Resolve-SmartDevDir -ErrorAction SilentlyContinue)) {
+                $smart = Resolve-SmartDevDir
+                Write-Log ("Configured default drive '${driveName}:' not present -- using smart-detected dev dir: $smart") -Level "info"
+                return (Join-Path $smart "go")
+            }
         }
 
         if (Get-Command Resolve-UsableDevDir -ErrorAction SilentlyContinue) {
@@ -1122,11 +1149,16 @@ function Test-GoVetAvailability {
 
         try {
             New-Item -Path $tempVetDir -ItemType Directory -Force -Confirm:$false | Out-Null
-            Set-Content -LiteralPath $mainFilePath -Value "package main`n`nfunc main() {}`n" -Encoding UTF8
-            # Write go.mod directly -- avoids `go mod init` stderr noise tripping
-            # PowerShell's terminating-error pipeline.
+            # Write files via .NET with UTF8 *without BOM*. PowerShell 5's
+            # `Set-Content -Encoding UTF8` emits a BOM, which Go's modfile
+            # parser silently ignores -- making it look like there is no
+            # go.mod, after which `go vet ./...` auto-creates one and
+            # emits the misleading "go: creating new go.mod: module ..."
+            # line that previously surfaced as a probe failure.
+            $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+            [System.IO.File]::WriteAllText($mainFilePath, "package main`n`nfunc main() {}`n", $utf8NoBom)
             $goModContent = "module scripts-fixer-vet-check`n`ngo 1.21`n"
-            Set-Content -LiteralPath $goModPath -Value $goModContent -Encoding UTF8
+            [System.IO.File]::WriteAllText($goModPath, $goModContent, $utf8NoBom)
         } catch {
             $createError = $_
             Write-FileError -FilePath $mainFilePath -Operation "write" `
