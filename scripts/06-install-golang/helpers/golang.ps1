@@ -1074,7 +1074,17 @@ function Configure-GoEnv {
             $hasFailed = -not $ok
             if ($hasFailed) { $isAllOk = $false }
         } else {
-            Write-Log ($LogMessages.messages.goEnvNoValue -replace '\{key\}', $key) -Level "warn"
+            # Distinguish "config explicitly says empty value" (info) from
+            # "config expected a value but resolution failed" (warn). When the
+            # entry has a 'value' property whose content is intentionally blank
+            # AND we're non-interactive, this is a user opt-out, not a bug.
+            $hasValueProperty   = $entry.PSObject.Properties.Name -contains "value"
+            $isExplicitlyEmpty  = $hasValueProperty -and [string]::IsNullOrWhiteSpace("$($entry.value)")
+            if ($isExplicitlyEmpty) {
+                Write-Log ($LogMessages.messages.goEnvNoValueOptional -replace '\{key\}', $key) -Level "info"
+            } else {
+                Write-Log ($LogMessages.messages.goEnvNoValue -replace '\{key\}', $key) -Level "warn"
+            }
         }
     }
 
