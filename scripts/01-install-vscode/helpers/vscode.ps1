@@ -77,6 +77,7 @@ function Invoke-VsCodeSetup {
     )
 
     $editions = $Config.editions
+    $isAutoYes = $env:SCRIPTS_AUTO_YES -eq "1"
 
     switch ($Command) {
         "stable" {
@@ -111,7 +112,7 @@ function Invoke-VsCodeSetup {
                                            -LogMessages $LogMessages
                 }
             }
-            elseif ($shouldPrompt) {
+            elseif ($shouldPrompt -and -not $isAutoYes) {
                 Write-Host ""
                 Write-Host $LogMessages.messages.editionPrompt -ForegroundColor Cyan
                 Write-Host $LogMessages.messages.editionOptionStable
