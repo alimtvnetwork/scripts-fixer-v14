@@ -8,6 +8,10 @@ $_loggingPath = Join-Path $_sharedDir "logging.ps1"
 if ((Test-Path $_loggingPath) -and -not (Get-Command Write-Log -ErrorAction SilentlyContinue)) {
     . $_loggingPath
 }
+$_npmUtilsPath = Join-Path $_sharedDir "npm-utils.ps1"
+if ((Test-Path $_npmUtilsPath) -and -not (Get-Command Invoke-NpmGlobalInstall -ErrorAction SilentlyContinue)) {
+    . $_npmUtilsPath
+}
 
 
 function Install-Pnpm {
