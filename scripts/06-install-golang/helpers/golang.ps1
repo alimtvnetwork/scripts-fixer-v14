@@ -1044,8 +1044,8 @@ function Install-GoTools {
                 $allLines = @()
                 $stdoutLines = if (Test-Path $stdoutPath) { Get-Content -Path $stdoutPath -ErrorAction SilentlyContinue } else { @() }
                 $stderrLines = if (Test-Path $stderrPath) { Get-Content -Path $stderrPath -ErrorAction SilentlyContinue } else { @() }
-                foreach ($line in @($stdoutLines + $stderrLines)) {
-                    $line = "$_"
+                foreach ($line in @(@($stdoutLines) + @($stderrLines))) {
+                    $line = "$line"
                     if ($line.Trim().Length -gt 0) {
                         Write-Log $line -Level "info"
                         $allLines += $line
