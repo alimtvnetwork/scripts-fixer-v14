@@ -696,15 +696,32 @@ function Resolve-Gopath {
         return $derived
     }
 
+    function Resolve-SafeGopathPath {
+        param([string]$CandidatePath)
+
+        if ([string]::IsNullOrWhiteSpace($CandidatePath)) {
+            return (Join-Path (Get-SafeDevDirFallback) "go")
+        }
+
+        if (Get-Command Resolve-UsableDevDir -ErrorAction SilentlyContinue) {
+            $basePath = Resolve-UsableDevDir -PathValue $CandidatePath
+            return $basePath
+        }
+
+        return $CandidatePath
+    }
+
     $hasNoConfig = -not $GopathConfig
     if ($hasNoConfig) {
-        $fallback = "E:\dev-tool\go"
+        $fallback = Resolve-SafeGopathPath -CandidatePath "E:\dev-tool\go"
         Write-Log ($LogMessages.messages.gopathNoConfig -replace '\{path\}', $fallback) -Level "warn"
         return $fallback
     }
 
-    $default  = if ($GopathConfig.default)  { $GopathConfig.default }  else { "E:\dev-tool\go" }
-    $override = if ($GopathConfig.override) { $GopathConfig.override } else { "" }
+    $defaultRaw  = if ($GopathConfig.default)  { $GopathConfig.default }  else { "E:\dev-tool\go" }
+    $overrideRaw = if ($GopathConfig.override) { $GopathConfig.override } else { "" }
+    $default  = Resolve-SafeGopathPath -CandidatePath $defaultRaw
+    $override = if ([string]::IsNullOrWhiteSpace($overrideRaw)) { "" } else { Resolve-SafeGopathPath -CandidatePath $overrideRaw }
 
     $hasOverride = -not [string]::IsNullOrWhiteSpace($override)
     if ($hasOverride) {
