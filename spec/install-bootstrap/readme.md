@@ -26,7 +26,7 @@
 ## Purpose
 
 When a user pipes `install.ps1` (Windows) or `install.sh` (Unix/macOS) from a
-specific versioned repository (e.g. `scripts-fixer-v5`), the bootstrap should
+specific versioned repository (e.g. `scripts-fixer-v14`), the bootstrap should
 **transparently redirect to the newest published version** of the repo
 (e.g. `scripts-fixer-v14`) instead of installing a stale generation.
 
@@ -38,8 +38,8 @@ unknowingly installing outdated code.
 The project is published as a **family of versioned repositories**:
 
 ```
-github.com/<owner>/scripts-fixer-v1
-github.com/<owner>/scripts-fixer-v2
+github.com/<owner>/scripts-fixer-v14
+github.com/<owner>/scripts-fixer-v14
 ...
 github.com/<owner>/scripts-fixer-v14      <-- current
 github.com/<owner>/scripts-fixer-v14      <-- not yet created
@@ -48,7 +48,7 @@ github.com/<owner>/scripts-fixer-v14      <-- not yet created
 Each major generation lives in its own repo. A user who runs:
 
 ```
-irm https://raw.githubusercontent.com/alimtvnetwork/scripts-fixer-v5/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/alimtvnetwork/scripts-fixer-v14/main/install.ps1 | iex
 ```
 
 should not be locked into v5. The bootstrap must discover that v7 exists and
@@ -238,8 +238,8 @@ exit 0
 
 ## Testing checklist
 
-- [ ] Run from `scripts-fixer-v5` when only v5 exists → runs self
-- [ ] Run from `scripts-fixer-v5` when v7 exists → redirects to v7
+- [ ] Run from `scripts-fixer-v14` when only v5 exists → runs self
+- [ ] Run from `scripts-fixer-v14` when v7 exists → redirects to v7
 - [ ] Run from `scripts-fixer-v14` (latest) → runs self with "[OK] You're on the latest"
 - [ ] Run from a fork named `my-fork` (no `-vN`) → runs self, no probes
 - [ ] Run with `-NoUpgrade` → skips discovery
